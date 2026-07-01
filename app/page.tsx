@@ -1,11 +1,8 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import {
   BarChart3,
   CalendarDays,
-  CheckCircle2,
   Factory,
   History,
   Home as HomeIcon,
@@ -13,10 +10,12 @@ import {
   Package,
   Plus,
   RotateCcw,
+  UserRound,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 const initialStocks = 26;
+const piecesPerStock = 30;
 const stockStorageKey = "shomai-current-stocks";
 const productionStorageKey = "shomai-production-today";
 const historyStorageKey = "shomai-production-history";
@@ -27,7 +26,24 @@ type ProductionRecord = {
   date: string;
   startingStocks: number;
   productionAdded: number;
+  releases: StockRelease[];
   endingStocks: number;
+};
+
+type StockRelease = {
+  id: string;
+  paymentStatus: PaymentStatus;
+  quantity: number;
+  takenBy: string;
+  time: string;
+};
+
+type PaymentStatus = "paid" | "partial" | "not_paid";
+
+const paymentLabels: Record<PaymentStatus, string> = {
+  not_paid: "Not Paid",
+  paid: "Paid",
+  partial: "Partial",
 };
 
 function getTodayKey() {
@@ -50,6 +66,29 @@ function sortHistory(history: ProductionRecord[]) {
   return [...history].sort((a, b) => b.date.localeCompare(a.date));
 }
 
+function getReleasedTotal(record?: ProductionRecord) {
+  return record?.releases.reduce((total, release) => total + release.quantity, 0) ?? 0;
+}
+
+function normalizeRecord(record: ProductionRecord): ProductionRecord {
+  const releases = Array.isArray(record.releases)
+    ? record.releases.map((release) => ({
+        ...release,
+        paymentStatus: release.paymentStatus ?? ("not_paid" as PaymentStatus),
+      }))
+    : [];
+  const releasedTotal = releases.reduce(
+    (total, release) => total + release.quantity,
+    0,
+  );
+
+  return {
+    ...record,
+    releases,
+    endingStocks: record.startingStocks + record.productionAdded - releasedTotal,
+  };
+}
+
 export default function Home() {
   const todayKey = getTodayKey();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
@@ -57,61 +96,70 @@ export default function Home() {
   const [productionToday, setProductionToday] = useState(0);
   const [productionInput, setProductionInput] = useState("");
   const [correctionInput, setCorrectionInput] = useState("");
+  const [releaseInput, setReleaseInput] = useState("");
+  const [releaseName, setReleaseName] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("not_paid");
   const [history, setHistory] = useState<ProductionRecord[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("Loading database");
   const [reviewDate, setReviewDate] = useState(todayKey);
   const productionDate = formatDisplayDate(todayKey);
   const reviewedRecord = history.find((record) => record.date === reviewDate);
   const recentHistory = useMemo(() => sortHistory(history).slice(0, 5), [history]);
+  const releasedToday = getReleasedTotal(history.find((record) => record.date === todayKey));
+  const reviewedReleased = getReleasedTotal(reviewedRecord);
+  const currentPieces = currentStocks * piecesPerStock;
+  const productionPiecesToday = productionToday * piecesPerStock;
+  const releasedPiecesToday = releasedToday * piecesPerStock;
 
   // localStorage hydration needs to update client state after mount.
   useEffect(() => {
-    const savedHistory = window.localStorage.getItem(historyStorageKey);
-    const savedStocks = Number(window.localStorage.getItem(stockStorageKey));
-    const savedProduction = Number(
-      window.localStorage.getItem(productionStorageKey),
-    );
-    const validSavedStocks =
-      Number.isFinite(savedStocks) && savedStocks > 0
-        ? savedStocks
-        : initialStocks;
-    const validSavedProduction =
-      Number.isFinite(savedProduction) && savedProduction >= 0
-        ? savedProduction
-        : 0;
-
-    if (savedHistory) {
-      try {
-        const parsedHistory = JSON.parse(savedHistory) as ProductionRecord[];
-        if (Array.isArray(parsedHistory)) {
-          const nextHistory = sortHistory(parsedHistory);
-          const todayRecord = nextHistory.find(
-            (record) => record.date === todayKey,
-          );
-
-          setHistory(nextHistory);
-          setCurrentStocks(todayRecord?.endingStocks ?? validSavedStocks);
-          setProductionToday(todayRecord?.productionAdded ?? 0);
-          return;
-        }
-      } catch {
-        window.localStorage.removeItem(historyStorageKey);
-      }
-    }
-
-    const migratedRecord: ProductionRecord = {
-      date: todayKey,
-      endingStocks: validSavedStocks,
-      productionAdded: validSavedProduction,
-      startingStocks: validSavedStocks - validSavedProduction,
-    };
-    const nextHistory = [migratedRecord];
-
-    saveState(nextHistory, migratedRecord);
+    loadRecords();
+    // loadRecords is intentionally scoped to the current todayKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayKey]);
 
-  function saveState(nextHistory: ProductionRecord[], todayRecord: ProductionRecord) {
+  async function loadRecords() {
+    try {
+      const response = await fetch("/api/records");
+      if (!response.ok) {
+        throw new Error("Unable to load records.");
+      }
+
+      const data = (await response.json()) as { records: ProductionRecord[] };
+      const nextHistory = sortHistory((data.records ?? []).map(normalizeRecord));
+      const todayRecord = nextHistory.find((record) => record.date === todayKey);
+
+      if (todayRecord) {
+        setHistory(nextHistory);
+        setCurrentStocks(todayRecord.endingStocks);
+        setProductionToday(todayRecord.productionAdded);
+        setSyncStatus("Synced");
+        return;
+      }
+
+      const previousRecord = nextHistory[0];
+      const newTodayRecord: ProductionRecord = {
+        date: todayKey,
+        endingStocks: previousRecord?.endingStocks ?? initialStocks,
+        productionAdded: 0,
+        releases: [],
+        startingStocks: previousRecord?.endingStocks ?? initialStocks,
+      };
+
+      await saveState([newTodayRecord, ...nextHistory], newTodayRecord);
+    } catch {
+      setSyncStatus("Database unavailable");
+    }
+  }
+
+  async function saveState(
+    nextHistory: ProductionRecord[],
+    todayRecord: ProductionRecord,
+  ) {
     const sortedHistory = sortHistory(nextHistory);
 
+    setIsSaving(true);
     setHistory(sortedHistory);
     setCurrentStocks(todayRecord.endingStocks);
     setProductionToday(todayRecord.productionAdded);
@@ -121,9 +169,26 @@ export default function Home() {
       String(todayRecord.productionAdded),
     );
     window.localStorage.setItem(historyStorageKey, JSON.stringify(sortedHistory));
+    setSyncStatus("Saving");
+
+    try {
+      const response = await fetch("/api/records", {
+        body: JSON.stringify(todayRecord),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Unable to save record.");
+      }
+      setSyncStatus("Synced");
+    } catch {
+      setSyncStatus("Save failed");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function updateTodayProduction(delta: number) {
+  async function updateTodayProduction(delta: number) {
     const existingToday = history.find((record) => record.date === todayKey);
     const startingStocks = existingToday?.startingStocks ?? currentStocks;
     const nextProductionToday = Math.max(
@@ -132,8 +197,10 @@ export default function Home() {
     );
     const nextRecord: ProductionRecord = {
       date: todayKey,
-      endingStocks: startingStocks + nextProductionToday,
+      endingStocks:
+        startingStocks + nextProductionToday - getReleasedTotal(existingToday),
       productionAdded: nextProductionToday,
+      releases: existingToday?.releases ?? [],
       startingStocks,
     };
     const nextHistory = [
@@ -141,7 +208,7 @@ export default function Home() {
       ...history.filter((record) => record.date !== todayKey),
     ];
 
-    saveState(nextHistory, nextRecord);
+    await saveState(nextHistory, nextRecord);
     setReviewDate(todayKey);
   }
 
@@ -153,7 +220,7 @@ export default function Home() {
       return;
     }
 
-    updateTodayProduction(quantity);
+    void updateTodayProduction(quantity);
     setProductionInput("");
   }
 
@@ -165,7 +232,7 @@ export default function Home() {
       return;
     }
 
-    updateTodayProduction(-quantity);
+    void updateTodayProduction(-quantity);
     setCorrectionInput("");
   }
 
@@ -176,13 +243,62 @@ export default function Home() {
       date: todayKey,
       endingStocks: startingStocks,
       productionAdded: 0,
+      releases: [],
       startingStocks,
     };
 
-    saveState(
+    void saveState(
       [nextRecord, ...history.filter((record) => record.date !== todayKey)],
       nextRecord,
     );
+    setReviewDate(todayKey);
+  }
+
+  function releaseStocks(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const quantity = Number(releaseInput);
+    const takenBy = releaseName.trim();
+    if (!takenBy || !Number.isFinite(quantity) || quantity <= 0) {
+      return;
+    }
+
+    const existingToday = history.find((record) => record.date === todayKey);
+    const baseRecord: ProductionRecord = existingToday ?? {
+      date: todayKey,
+      endingStocks: currentStocks,
+      productionAdded: 0,
+      releases: [],
+      startingStocks: currentStocks,
+    };
+    const allowedQuantity = Math.min(quantity, baseRecord.endingStocks);
+    if (allowedQuantity <= 0) {
+      return;
+    }
+
+    const nextRelease: StockRelease = {
+      id: `${Date.now()}`,
+      paymentStatus,
+      quantity: allowedQuantity,
+      takenBy,
+      time: new Intl.DateTimeFormat("en-PH", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Singapore",
+      }).format(new Date()),
+    };
+    const nextRecord = normalizeRecord({
+      ...baseRecord,
+      releases: [nextRelease, ...baseRecord.releases],
+    });
+
+    void saveState(
+      [nextRecord, ...history.filter((record) => record.date !== todayKey)],
+      nextRecord,
+    );
+    setReleaseInput("");
+    setReleaseName("");
+    setPaymentStatus("not_paid");
     setReviewDate(todayKey);
   }
 
@@ -237,17 +353,26 @@ export default function Home() {
         </header>
 
         <section className="min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-4 shadow-xl shadow-black/20 sm:p-6">
+          <div className="mb-4 flex items-center justify-between gap-3 rounded-[8px] border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-300">
+            <span>{syncStatus}</span>
+            {isSaving && <span className="text-emerald-300">Saving...</span>}
+          </div>
           {activeTab === "dashboard" && (
             <div className="grid h-full gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="grid gap-4 sm:grid-cols-3 lg:content-start">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 lg:content-start">
                 <MetricCard icon={Package} label="Stocks Today" value={currentStocks} />
+                <MetricCard
+                  icon={Package}
+                  label="Pieces Today"
+                  tone="emerald"
+                  value={currentPieces}
+                />
                 <MetricCard
                   icon={Factory}
                   label="Production Today"
-                  tone="emerald"
                   value={productionToday}
                 />
-                <MetricCard icon={CheckCircle2} label="Status" value="Ready" />
+                <MetricCard icon={UserRound} label="Released Today" value={releasedToday} />
               </div>
 
               <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-5">
@@ -256,6 +381,11 @@ export default function Home() {
                   <p className="text-sm font-medium">{productionDate}</p>
                 </div>
                 <div className="mt-8 grid gap-3">
+                  <div className="grid grid-cols-3 gap-2 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 text-center">
+                    <SmallMetric label="Made pcs" tone="emerald" value={productionPiecesToday} />
+                    <SmallMetric label="Out pcs" value={releasedPiecesToday} />
+                    <SmallMetric label="Per stock" value={piecesPerStock} />
+                  </div>
                   <button
                     aria-label="Open production entry"
                     className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 font-semibold text-zinc-950 transition-colors hover:bg-emerald-200"
@@ -291,6 +421,22 @@ export default function Home() {
                     placeholder="Enter quantity"
                     value={productionInput}
                   />
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium text-zinc-300">
+                      Payment
+                    </span>
+                    <select
+                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+                      onChange={(event) =>
+                        setPaymentStatus(event.target.value as PaymentStatus)
+                      }
+                      value={paymentStatus}
+                    >
+                      <option value="not_paid">Not Paid</option>
+                      <option value="partial">Partial</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </label>
                   <button
                     aria-label="Add production"
                     className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 font-semibold text-zinc-950 transition-colors hover:bg-emerald-200"
@@ -299,6 +445,32 @@ export default function Home() {
                   >
                     <Plus aria-hidden="true" size={18} />
                     Add
+                  </button>
+                </form>
+              </Panel>
+
+              <Panel icon={UserRound} title="Release Stocks">
+                <form className="grid gap-4" onSubmit={releaseStocks}>
+                  <TextField
+                    label="Taken By"
+                    onChange={setReleaseName}
+                    placeholder="Name"
+                    value={releaseName}
+                  />
+                  <NumberField
+                    label="Quantity"
+                    onChange={setReleaseInput}
+                    placeholder="Enter quantity"
+                    value={releaseInput}
+                  />
+                  <button
+                    aria-label="Release stocks"
+                    className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 font-semibold text-zinc-950 transition-colors hover:bg-emerald-200"
+                    title="Release stocks"
+                    type="submit"
+                  >
+                    <Minus aria-hidden="true" size={18} />
+                    Release
                   </button>
                 </form>
               </Panel>
@@ -356,34 +528,29 @@ export default function Home() {
                     tone="emerald"
                     value={reviewedRecord?.productionAdded ?? "-"}
                   />
+                  <SmallMetric
+                    label="Made pcs"
+                    tone="emerald"
+                    value={
+                      reviewedRecord
+                        ? reviewedRecord.productionAdded * piecesPerStock
+                        : "-"
+                    }
+                  />
+                  <SmallMetric label="Released" value={reviewedRecord ? reviewedReleased : "-"} />
+                  <SmallMetric
+                    label="Out pcs"
+                    value={reviewedRecord ? reviewedReleased * piecesPerStock : "-"}
+                  />
                   <SmallMetric label="Ending" value={reviewedRecord?.endingStocks ?? "-"} />
                 </div>
               </Panel>
 
               <Panel icon={History} title="Recent Days">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[560px] border-collapse text-left text-sm">
-                    <thead className="text-zinc-400">
-                      <tr className="border-b border-zinc-800">
-                        <th className="py-3 pr-4 font-medium">Date</th>
-                        <th className="py-3 pr-4 font-medium">Starting</th>
-                        <th className="py-3 pr-4 font-medium">Production</th>
-                        <th className="py-3 pr-4 font-medium">Ending</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-zinc-200">
-                      {recentHistory.map((record) => (
-                        <tr className="border-b border-zinc-900" key={record.date}>
-                          <td className="py-3 pr-4">{formatDisplayDate(record.date)}</td>
-                          <td className="py-3 pr-4">{record.startingStocks}</td>
-                          <td className="py-3 pr-4 text-emerald-300">
-                            {record.productionAdded}
-                          </td>
-                          <td className="py-3 pr-4">{record.endingStocks}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="grid gap-3">
+                  {recentHistory.map((record) => (
+                    <HistoryCard key={record.date} record={record} />
+                  ))}
                 </div>
               </Panel>
             </div>
@@ -464,6 +631,31 @@ function NumberField({
   );
 }
 
+function TextField({
+  label,
+  onChange,
+  placeholder,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-medium text-zinc-300">{label}</span>
+      <input
+        className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors placeholder:text-zinc-600 focus:border-emerald-300"
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        type="text"
+        value={value}
+      />
+    </label>
+  );
+}
+
 function SmallMetric({
   label,
   tone,
@@ -480,5 +672,71 @@ function SmallMetric({
         {value}
       </p>
     </div>
+  );
+}
+
+function HistoryCard({ record }: { record: ProductionRecord }) {
+  const releasedTotal = getReleasedTotal(record);
+  const madePieces = record.productionAdded * piecesPerStock;
+  const releasedPieces = releasedTotal * piecesPerStock;
+  const endingPieces = record.endingStocks * piecesPerStock;
+
+  return (
+    <article className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-4">
+      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+        <p className="font-semibold text-white">{formatDisplayDate(record.date)}</p>
+        <Package aria-hidden="true" className="text-zinc-500" size={18} />
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <SmallMetric label="Starting" value={record.startingStocks} />
+        <SmallMetric label="Made" tone="emerald" value={record.productionAdded} />
+        <SmallMetric label="Released" value={releasedTotal} />
+        <SmallMetric label="Ending" value={record.endingStocks} />
+        <SmallMetric label="Made pcs" tone="emerald" value={madePieces} />
+        <SmallMetric label="Out pcs" value={releasedPieces} />
+        <SmallMetric label="Ending pcs" value={endingPieces} />
+        <SmallMetric label="Pcs/stock" value={piecesPerStock} />
+      </div>
+      {record.releases.length > 0 && (
+        <div className="mt-4 grid gap-2 border-t border-zinc-800 pt-3">
+          {record.releases.map((release) => (
+            <div
+              className="grid gap-3 rounded-[8px] bg-zinc-950 px-3 py-3 text-sm sm:grid-cols-[1fr_auto]"
+              key={release.id}
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-zinc-200">
+                  {release.takenBy}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  {release.time} · {release.quantity * piecesPerStock} pcs
+                </p>
+              </div>
+              <div className="flex items-center justify-between gap-3 sm:justify-end">
+                <PaymentBadge status={release.paymentStatus} />
+                <p className="font-semibold text-red-200">-{release.quantity}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function PaymentBadge({ status }: { status: PaymentStatus }) {
+  const className =
+    status === "paid"
+      ? "border-emerald-800 bg-emerald-950/70 text-emerald-200"
+      : status === "partial"
+        ? "border-amber-800 bg-amber-950/70 text-amber-200"
+        : "border-red-900 bg-red-950/70 text-red-200";
+
+  return (
+    <span
+      className={`rounded-[8px] border px-2.5 py-1 text-xs font-semibold ${className}`}
+    >
+      {paymentLabels[status]}
+    </span>
   );
 }
