@@ -10,6 +10,7 @@ import {
   Package,
   Plus,
   RotateCcw,
+  Send,
   UserRound,
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -20,7 +21,7 @@ const stockStorageKey = "shomai-current-stocks";
 const productionStorageKey = "shomai-production-today";
 const historyStorageKey = "shomai-production-history";
 
-type Tab = "dashboard" | "production" | "history";
+type Tab = "dashboard" | "production" | "release" | "history";
 
 type ProductionRecord = {
   date: string;
@@ -321,10 +322,11 @@ export default function Home() {
               </div>
             </div>
 
-            <nav className="grid grid-cols-3 gap-2 rounded-[8px] border border-zinc-800 bg-zinc-950 p-1">
+            <nav className="grid grid-cols-4 gap-2 rounded-[8px] border border-zinc-800 bg-zinc-950 p-1">
               {[
                 { icon: HomeIcon, id: "dashboard" as Tab, label: "Dashboard" },
                 { icon: Plus, id: "production" as Tab, label: "Production" },
+                { icon: Send, id: "release" as Tab, label: "Release" },
                 { icon: History, id: "history" as Tab, label: "History" },
               ].map((item) => {
                 const Icon = item.icon;
@@ -406,6 +408,16 @@ export default function Home() {
                     <BarChart3 aria-hidden="true" size={18} />
                     Review History
                   </button>
+                  <button
+                    aria-label="Open release stocks"
+                    className="flex h-12 items-center justify-center gap-2 rounded-[8px] border border-zinc-700 px-4 font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
+                    onClick={() => setActiveTab("release")}
+                    title="Open release stocks"
+                    type="button"
+                  >
+                    <Send aria-hidden="true" size={18} />
+                    Release Stocks
+                  </button>
                 </div>
               </div>
             </div>
@@ -421,22 +433,6 @@ export default function Home() {
                     placeholder="Enter quantity"
                     value={productionInput}
                   />
-                  <label className="grid gap-2">
-                    <span className="text-sm font-medium text-zinc-300">
-                      Payment
-                    </span>
-                    <select
-                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
-                      onChange={(event) =>
-                        setPaymentStatus(event.target.value as PaymentStatus)
-                      }
-                      value={paymentStatus}
-                    >
-                      <option value="not_paid">Not Paid</option>
-                      <option value="partial">Partial</option>
-                      <option value="paid">Paid</option>
-                    </select>
-                  </label>
                   <button
                     aria-label="Add production"
                     className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 font-semibold text-zinc-950 transition-colors hover:bg-emerald-200"
@@ -445,32 +441,6 @@ export default function Home() {
                   >
                     <Plus aria-hidden="true" size={18} />
                     Add
-                  </button>
-                </form>
-              </Panel>
-
-              <Panel icon={UserRound} title="Release Stocks">
-                <form className="grid gap-4" onSubmit={releaseStocks}>
-                  <TextField
-                    label="Taken By"
-                    onChange={setReleaseName}
-                    placeholder="Name"
-                    value={releaseName}
-                  />
-                  <NumberField
-                    label="Quantity"
-                    onChange={setReleaseInput}
-                    placeholder="Enter quantity"
-                    value={releaseInput}
-                  />
-                  <button
-                    aria-label="Release stocks"
-                    className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 font-semibold text-zinc-950 transition-colors hover:bg-emerald-200"
-                    title="Release stocks"
-                    type="submit"
-                  >
-                    <Minus aria-hidden="true" size={18} />
-                    Release
                   </button>
                 </form>
               </Panel>
@@ -505,6 +475,65 @@ export default function Home() {
                     </button>
                   </div>
                 </form>
+              </Panel>
+            </div>
+          )}
+
+          {activeTab === "release" && (
+            <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
+              <Panel icon={Send} title="Release Stocks">
+                <form className="grid gap-4" onSubmit={releaseStocks}>
+                  <TextField
+                    label="Taken By"
+                    onChange={setReleaseName}
+                    placeholder="Name"
+                    value={releaseName}
+                  />
+                  <NumberField
+                    label="Quantity"
+                    onChange={setReleaseInput}
+                    placeholder="Enter quantity"
+                    value={releaseInput}
+                  />
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium text-zinc-300">
+                      Payment Status
+                    </span>
+                    <select
+                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+                      onChange={(event) =>
+                        setPaymentStatus(event.target.value as PaymentStatus)
+                      }
+                      value={paymentStatus}
+                    >
+                      <option value="not_paid">Not Paid</option>
+                      <option value="partial">Partial</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </label>
+                  <button
+                    aria-label="Release stocks"
+                    className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 font-semibold text-zinc-950 transition-colors hover:bg-emerald-200"
+                    title="Release stocks"
+                    type="submit"
+                  >
+                    <Minus aria-hidden="true" size={18} />
+                    Release
+                  </button>
+                </form>
+              </Panel>
+
+              <Panel icon={Package} title="Stock Summary">
+                <div className="grid gap-3">
+                  <SmallMetric label="Available stocks" value={currentStocks} />
+                  <SmallMetric
+                    label="Available pcs"
+                    tone="emerald"
+                    value={currentPieces}
+                  />
+                  <SmallMetric label="Released today" value={releasedToday} />
+                  <SmallMetric label="Released pcs" value={releasedPiecesToday} />
+                </div>
               </Panel>
             </div>
           )}
