@@ -16,7 +16,7 @@ import {
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 const initialStocks = 26;
-const piecesPerStock = 30;
+const defaultPiecesPerStock = 30;
 const stockStorageKey = "shomai-current-stocks";
 const productionStorageKey = "shomai-production-today";
 const historyStorageKey = "shomai-production-history";
@@ -103,6 +103,7 @@ export default function Home() {
   const [history, setHistory] = useState<ProductionRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Loading database");
+  const [piecesPerStock, setPiecesPerStock] = useState(defaultPiecesPerStock);
   const [reviewDate, setReviewDate] = useState(todayKey);
   const productionDate = formatDisplayDate(todayKey);
   const reviewedRecord = history.find((record) => record.date === reviewDate);
@@ -116,9 +117,29 @@ export default function Home() {
   // localStorage hydration needs to update client state after mount.
   useEffect(() => {
     loadRecords();
+    loadConfig();
     // loadRecords is intentionally scoped to the current todayKey.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayKey]);
+
+  async function loadConfig() {
+    try {
+      const response = await fetch("/api/config");
+      if (!response.ok) {
+        return;
+      }
+
+      const data = (await response.json()) as { piecesPerStock?: number };
+      if (
+        Number.isFinite(data.piecesPerStock) &&
+        Number(data.piecesPerStock) > 0
+      ) {
+        setPiecesPerStock(Number(data.piecesPerStock));
+      }
+    } catch {
+      setPiecesPerStock(defaultPiecesPerStock);
+    }
+  }
 
   async function loadRecords() {
     try {
@@ -578,7 +599,11 @@ export default function Home() {
               <Panel icon={History} title="Recent Days">
                 <div className="grid gap-3">
                   {recentHistory.map((record) => (
-                    <HistoryCard key={record.date} record={record} />
+                    <HistoryCard
+                      key={record.date}
+                      piecesPerStock={piecesPerStock}
+                      record={record}
+                    />
                   ))}
                 </div>
               </Panel>
@@ -704,7 +729,13 @@ function SmallMetric({
   );
 }
 
-function HistoryCard({ record }: { record: ProductionRecord }) {
+function HistoryCard({
+  piecesPerStock,
+  record,
+}: {
+  piecesPerStock: number;
+  record: ProductionRecord;
+}) {
   const releasedTotal = getReleasedTotal(record);
   const madePieces = record.productionAdded * piecesPerStock;
   const releasedPieces = releasedTotal * piecesPerStock;
