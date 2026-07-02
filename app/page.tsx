@@ -199,6 +199,7 @@ export default function Home() {
   const [newConsignmentPin, setNewConsignmentPin] = useState("");
   const [consignmentPinStatus, setConsignmentPinStatus] = useState("");
   const [openConsignmentMenu, setOpenConsignmentMenu] = useState("");
+  const [showAddConsignment, setShowAddConsignment] = useState(false);
   const [showOrders, setShowOrders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState("Notifications off");
@@ -485,6 +486,7 @@ export default function Home() {
 
     setConsignmentPinStatus(`PIN ${newConsignmentPin} is ready for consignee login.`);
     setNewConsignmentPin("");
+    setShowAddConsignment(false);
     await loadConsignmentAccounts();
   }
 
@@ -1163,36 +1165,63 @@ export default function Home() {
           )}
 
           {activeTab === "consignment" && (
-            <div className="grid gap-3 lg:grid-cols-[0.8fr_1.2fr]">
-              <Panel icon={KeyRound} title="Generate PIN">
-                <div className="grid gap-4">
-                  <div className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-4">
-                    <p className="text-sm text-zinc-400">New consignee PIN</p>
-                    <p className="mt-2 text-4xl font-semibold tracking-[0.25em] text-emerald-300">
-                      {newConsignmentPin || "----"}
+            <div className="grid gap-3">
+              <section className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <UserRound aria-hidden="true" className="text-emerald-300" size={20} />
+                      <h2 className="text-xl font-semibold text-white">Consignment</h2>
+                    </div>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Manage consignee accounts, stocks, PIN access, and sales.
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      className="h-12 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
-                      onClick={generatePin}
-                      type="button"
-                    >
-                      Generate
-                    </button>
-                    <button
-                      className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
-                      onClick={() => void saveConsignmentPin()}
-                      type="button"
-                    >
-                      Save PIN
-                    </button>
-                  </div>
-                  {consignmentPinStatus && (
-                    <p className="text-sm text-zinc-300">{consignmentPinStatus}</p>
-                  )}
+                  <button
+                    className="flex h-11 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 text-sm font-semibold text-zinc-950"
+                    onClick={() => {
+                      setShowAddConsignment((current) => !current);
+                      setConsignmentPinStatus("");
+                    }}
+                    type="button"
+                  >
+                    <Plus aria-hidden="true" size={17} />
+                    Add Consignment
+                  </button>
                 </div>
-              </Panel>
+              </section>
+
+              {showAddConsignment && (
+                <Panel icon={KeyRound} title="Generate PIN">
+                  <div className="grid gap-4">
+                    <div className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-4">
+                      <p className="text-sm text-zinc-400">New consignee PIN</p>
+                      <p className="mt-2 text-4xl font-semibold tracking-[0.25em] text-emerald-300">
+                        {newConsignmentPin || "----"}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        className="h-12 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
+                        onClick={generatePin}
+                        type="button"
+                      >
+                        Generate
+                      </button>
+                      <button
+                        className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+                        onClick={() => void saveConsignmentPin()}
+                        type="button"
+                      >
+                        Save PIN
+                      </button>
+                    </div>
+                    {consignmentPinStatus && (
+                      <p className="text-sm text-zinc-300">{consignmentPinStatus}</p>
+                    )}
+                  </div>
+                </Panel>
+              )}
 
               <Panel icon={UserRound} title="Consignment Stocks">
                 <div className="grid gap-3">
