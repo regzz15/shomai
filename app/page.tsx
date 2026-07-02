@@ -10,6 +10,7 @@ import {
   Home as HomeIcon,
   KeyRound,
   Minus,
+  MoreVertical,
   Package,
   Plus,
   ReceiptText,
@@ -195,6 +196,7 @@ export default function Home() {
   const [consignmentAccounts, setConsignmentAccounts] = useState<ConsignmentAccount[]>([]);
   const [newConsignmentPin, setNewConsignmentPin] = useState("");
   const [consignmentPinStatus, setConsignmentPinStatus] = useState("");
+  const [openConsignmentMenu, setOpenConsignmentMenu] = useState("");
   const [showOrders, setShowOrders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState("Notifications off");
@@ -476,6 +478,7 @@ export default function Home() {
   }
 
   async function removeConsignmentPin(customerName: string) {
+    setOpenConsignmentMenu("");
     const response = await fetch("/api/consignment-accounts", {
       body: JSON.stringify({
         action: "remove_pin",
@@ -491,6 +494,7 @@ export default function Home() {
   }
 
   async function deleteConsignmentAccount(customerName: string) {
+    setOpenConsignmentMenu("");
     const shouldDelete = window.confirm(`Delete consignment account "${customerName}"?`);
     if (!shouldDelete) {
       return;
@@ -1174,7 +1178,7 @@ export default function Home() {
                     )}
                     {consignmentStockRows.map((account) => (
                       <article
-                        className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3"
+                        className="relative rounded-[8px] border border-zinc-800 bg-zinc-900 p-3"
                         key={account.pinCode || account.customerName}
                       >
                         <div className="flex items-start justify-between gap-3">
@@ -1193,10 +1197,43 @@ export default function Home() {
                               </p>
                             )}
                           </div>
-                          <span className="rounded-[8px] bg-emerald-300 px-3 py-1 text-sm font-semibold text-zinc-950">
-                            {account.currentStocks}
-                          </span>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <span className="rounded-[8px] bg-emerald-300 px-3 py-1 text-sm font-semibold text-zinc-950">
+                              {account.currentStocks}
+                            </span>
+                            <button
+                              aria-label="Account actions"
+                              className="grid h-8 w-8 place-items-center rounded-[8px] border border-zinc-700 text-zinc-300"
+                              onClick={() =>
+                                setOpenConsignmentMenu((current) =>
+                                  current === account.customerName ? "" : account.customerName,
+                                )
+                              }
+                              type="button"
+                            >
+                              <MoreVertical aria-hidden="true" size={17} />
+                            </button>
+                          </div>
                         </div>
+                        {openConsignmentMenu === account.customerName && (
+                          <div className="absolute right-3 top-12 z-10 grid w-44 gap-1 rounded-[8px] border border-zinc-700 bg-zinc-950 p-2 shadow-xl shadow-black/40">
+                            <button
+                              className="h-10 rounded-[8px] px-3 text-left text-sm font-semibold text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                              disabled={!account.pinCode}
+                              onClick={() => void removeConsignmentPin(account.customerName)}
+                              type="button"
+                            >
+                              Remove PIN
+                            </button>
+                            <button
+                              className="h-10 rounded-[8px] px-3 text-left text-sm font-semibold text-red-200 hover:bg-red-950/40"
+                              onClick={() => void deleteConsignmentAccount(account.customerName)}
+                              type="button"
+                            >
+                              Delete Account
+                            </button>
+                          </div>
+                        )}
                         <div className="mt-3 grid grid-cols-3 gap-2">
                           <SmallMetric label="Stocks" value={account.currentStocks} />
                           <SmallMetric
@@ -1219,23 +1256,6 @@ export default function Home() {
                             ))}
                           </div>
                         )}
-                        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-zinc-800 pt-3">
-                          <button
-                            className="h-10 rounded-[8px] border border-zinc-700 text-sm font-semibold text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
-                            disabled={!account.pinCode}
-                            onClick={() => void removeConsignmentPin(account.customerName)}
-                            type="button"
-                          >
-                            Remove PIN
-                          </button>
-                          <button
-                            className="h-10 rounded-[8px] border border-red-900/80 text-sm font-semibold text-red-200"
-                            onClick={() => void deleteConsignmentAccount(account.customerName)}
-                            type="button"
-                          >
-                            Delete Account
-                          </button>
-                        </div>
                       </article>
                     ))}
                   </div>
