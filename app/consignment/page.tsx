@@ -1,12 +1,15 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { ClipboardList, LogOut, Package, Send, ShieldCheck } from "lucide-react";
 
 type ConsignmentAccount = {
   customerName: string;
   currentStocks: number;
   soldStocks: number;
 };
+
+type Tab = "orders" | "stocks";
 
 function getTodayKey() {
   return new Intl.DateTimeFormat("sv-SE", {
@@ -18,7 +21,9 @@ function getTodayKey() {
 }
 
 export default function ConsignmentPage() {
+  const [activeTab, setActiveTab] = useState<Tab>("orders");
   const [customerName, setCustomerName] = useState("");
+  const [pinCode, setPinCode] = useState("");
   const [packs, setPacks] = useState("");
   const [requestDate, setRequestDate] = useState(getTodayKey());
   const [notes, setNotes] = useState("");
@@ -27,33 +32,38 @@ export default function ConsignmentPage() {
   const [receiveQty, setReceiveQty] = useState("");
   const [sellQty, setSellQty] = useState("");
   const [accountStatus, setAccountStatus] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  async function loadAccount(name = customerName) {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setAccountStatus("Enter your name first.");
+  async function loadAccount(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    const trimmedName = customerName.trim();
+    if (!trimmedName || !/^\d{4}$/.test(pinCode)) {
+      setAccountStatus("Enter your name and 4-digit PIN.");
       return;
     }
 
+    setIsLoading(true);
     const response = await fetch(
-      `/api/consignment-accounts?customerName=${encodeURIComponent(trimmedName)}`,
+      `/api/consignment-accounts?customerName=${encodeURIComponent(trimmedName)}&pinCode=${encodeURIComponent(pinCode)}`,
     );
+    setIsLoading(false);
 
     if (!response.ok) {
-      setAccountStatus("Unable to load account.");
+      setAccountStatus("Invalid name or PIN.");
       return;
     }
 
     const data = (await response.json()) as { account: ConsignmentAccount };
     setAccount(data.account);
-    setAccountStatus("Account loaded.");
+    setAccountStatus("");
+    setStatus("");
   }
 
   async function updateAccount(action: "receive" | "sell", quantityText: string) {
     const quantity = Number(quantityText);
     const trimmedName = customerName.trim();
-    if (!trimmedName || !Number.isFinite(quantity) || quantity <= 0) {
-      setAccountStatus("Enter name and quantity.");
+    if (!trimmedName || !/^\d{4}$/.test(pinCode) || !Number.isFinite(quantity) || quantity <= 0) {
+      setAccountStatus("Enter a valid quantity.");
       return;
     }
 
@@ -61,6 +71,7 @@ export default function ConsignmentPage() {
       body: JSON.stringify({
         action,
         customerName: trimmedName,
+        pinCode,
         quantity,
       }),
       headers: { "Content-Type": "application/json" },
@@ -88,6 +99,7 @@ export default function ConsignmentPage() {
         customerName,
         notes,
         packs: Number(packs),
+        pinCode,
         requestDate,
       }),
       headers: { "Content-Type": "application/json" },
@@ -99,145 +111,237 @@ export default function ConsignmentPage() {
       return;
     }
 
-    setCustomerName("");
     setPacks("");
     setNotes("");
     setStatus("Order request sent.");
   }
 
+  function logout() {
+    setAccount(null);
+    setPinCode("");
+    setPacks("");
+    setNotes("");
+    setStatus("");
+    setAccountStatus("");
+  }
+
+  if (!account) {
+    return (
+      <main className="min-h-screen bg-zinc-950 px-4 py-5 text-zinc-50">
+        <section className="mx-auto grid min-h-[calc(100vh-40px)] max-w-md content-center gap-5">
+          <div className="grid gap-3">
+            <div className="grid h-12 w-12 place-items-center rounded-[8px] bg-emerald-300 text-zinc-950">
+              <ShieldCheck aria-hidden="true" size={25} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-emerald-300">Consignment App</p>
+              <h1 className="mt-1 text-3xl font-semibold tracking-normal text-white">
+                Siomai Login
+              </h1>
+            </div>
+          </div>
+
+          <form
+            className="grid gap-4 rounded-[8px] border border-zinc-800 bg-zinc-900 p-4 shadow-xl shadow-black/30"
+            onSubmit={loadAccount}
+          >
+            <label className="grid gap-2">
+              <span className="text-sm text-zinc-300">Name</span>
+              <input
+                className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                onChange={(event) => setCustomerName(event.target.value)}
+                required
+                value={customerName}
+              />
+            </label>
+            <label className="grid gap-2">
+              <span className="text-sm text-zinc-300">4-digit PIN</span>
+              <input
+                className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 text-center text-lg font-semibold tracking-[0.35em] outline-none focus:border-emerald-300"
+                inputMode="numeric"
+                maxLength={4}
+                onChange={(event) =>
+                  setPinCode(event.target.value.replace(/\D/g, "").slice(0, 4))
+                }
+                required
+                type="password"
+                value={pinCode}
+              />
+            </label>
+            <button
+              className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+              type="submit"
+            >
+              <ShieldCheck aria-hidden="true" size={18} />
+              {isLoading ? "Checking..." : "Login"}
+            </button>
+            {accountStatus && <p className="text-sm text-zinc-300">{accountStatus}</p>}
+          </form>
+        </section>
+      </main>
+    );
+  }
+
+  const currentAccount = account;
+
   return (
-    <main className="min-h-screen bg-zinc-950 px-4 py-6 text-zinc-50">
-      <section className="mx-auto grid max-w-md gap-5 rounded-[8px] border border-zinc-800 bg-zinc-900 p-5 shadow-xl shadow-black/30">
-        <div>
-          <p className="text-sm font-medium text-emerald-300">Consignment</p>
-          <h1 className="mt-1 text-2xl font-semibold">Siomai Order Request</h1>
-        </div>
-
-        <form className="grid gap-4" onSubmit={submitOrder}>
-          <label className="grid gap-2">
-            <span className="text-sm text-zinc-300">Name</span>
-            <input
-              className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
-              onChange={(event) => setCustomerName(event.target.value)}
-              required
-              value={customerName}
-            />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm text-zinc-300">Packs</span>
-            <input
-              className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
-              min="1"
-              onChange={(event) => setPacks(event.target.value)}
-              required
-              type="number"
-              value={packs}
-            />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm text-zinc-300">Date Needed</span>
-            <input
-              className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
-              onChange={(event) => setRequestDate(event.target.value)}
-              required
-              type="date"
-              value={requestDate}
-            />
-          </label>
-          <label className="grid gap-2">
-            <span className="text-sm text-zinc-300">Notes</span>
-            <textarea
-              className="min-h-24 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-emerald-300"
-              onChange={(event) => setNotes(event.target.value)}
-              value={notes}
-            />
-          </label>
-          <button
-            className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
-            type="submit"
-          >
-            Send Request
-          </button>
-        </form>
-
-        {status && <p className="text-sm text-zinc-300">{status}</p>}
-
-        <section className="grid gap-4 border-t border-zinc-800 pt-5">
-          <div>
-            <h2 className="text-xl font-semibold">My Stocks</h2>
-            <p className="mt-1 text-sm text-zinc-400">
-              Use the same name above to load and update your consignment stocks.
-            </p>
-          </div>
-
-          <button
-            className="h-11 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
-            onClick={() => loadAccount()}
-            type="button"
-          >
-            Load My Account
-          </button>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
-              <p className="text-sm text-zinc-400">Current stocks</p>
-              <p className="mt-1 text-3xl font-semibold text-white">
-                {account?.currentStocks ?? 0}
-              </p>
+    <main className="min-h-screen bg-zinc-950 text-zinc-50">
+      <section className="mx-auto grid min-h-screen max-w-md grid-rows-[auto_1fr_auto] px-3 pb-24 pt-3">
+        <header className="sticky top-0 z-10 rounded-[8px] border border-zinc-800 bg-zinc-900/95 p-3 shadow-xl shadow-black/20 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-emerald-300">Consignment</p>
+              <h1 className="truncate text-xl font-semibold text-white">
+                {currentAccount.customerName}
+              </h1>
             </div>
-            <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
-              <p className="text-sm text-zinc-400">Sold</p>
-              <p className="mt-1 text-3xl font-semibold text-emerald-300">
-                {account?.soldStocks ?? 0}
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-3">
-            <label className="grid gap-2">
-              <span className="text-sm text-zinc-300">Receive stocks</span>
-              <input
-                className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
-                min="1"
-                onChange={(event) => setReceiveQty(event.target.value)}
-                type="number"
-                value={receiveQty}
-              />
-            </label>
             <button
-              className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
-              onClick={() => updateAccount("receive", receiveQty)}
+              className="grid h-10 w-10 place-items-center rounded-[8px] border border-zinc-800 bg-zinc-950 text-zinc-300"
+              onClick={logout}
               type="button"
             >
-              Add to My Stocks
+              <LogOut aria-hidden="true" size={18} />
             </button>
           </div>
+        </header>
 
-          <div className="grid gap-3">
-            <label className="grid gap-2">
-              <span className="text-sm text-zinc-300">Record sold packs</span>
-              <input
-                className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
-                min="1"
-                onChange={(event) => setSellQty(event.target.value)}
-                type="number"
-                value={sellQty}
-              />
-            </label>
-            <button
-              className="h-12 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
-              onClick={() => updateAccount("sell", sellQty)}
-              type="button"
-            >
-              Record Sale
-            </button>
-          </div>
+        <section className="mt-3 min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20">
+          {activeTab === "orders" && (
+            <form className="grid gap-4" onSubmit={submitOrder}>
+              <div>
+                <h2 className="text-lg font-semibold">Request Order</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Send pack request to production.
+                </p>
+              </div>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Packs</span>
+                <input
+                  className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                  min="1"
+                  onChange={(event) => setPacks(event.target.value)}
+                  required
+                  type="number"
+                  value={packs}
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Date Needed</span>
+                <input
+                  className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                  onChange={(event) => setRequestDate(event.target.value)}
+                  required
+                  type="date"
+                  value={requestDate}
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Notes</span>
+                <textarea
+                  className="min-h-24 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-emerald-300"
+                  onChange={(event) => setNotes(event.target.value)}
+                  value={notes}
+                />
+              </label>
+              <button
+                className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+                type="submit"
+              >
+                <Send aria-hidden="true" size={18} />
+                Send Request
+              </button>
+              {status && <p className="text-sm text-zinc-300">{status}</p>}
+            </form>
+          )}
 
-          {accountStatus && (
-            <p className="text-sm text-zinc-300">{accountStatus}</p>
+          {activeTab === "stocks" && (
+            <div className="grid gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">My Stocks</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Track received packs and sold packs.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
+                  <p className="text-sm text-zinc-400">Current</p>
+                  <p className="mt-1 text-3xl font-semibold text-white">
+                    {currentAccount.currentStocks}
+                  </p>
+                </div>
+                <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
+                  <p className="text-sm text-zinc-400">Sold</p>
+                  <p className="mt-1 text-3xl font-semibold text-emerald-300">
+                    {currentAccount.soldStocks}
+                  </p>
+                </div>
+              </div>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Receive stocks</span>
+                <input
+                  className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                  min="1"
+                  onChange={(event) => setReceiveQty(event.target.value)}
+                  type="number"
+                  value={receiveQty}
+                />
+              </label>
+              <button
+                className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+                onClick={() => updateAccount("receive", receiveQty)}
+                type="button"
+              >
+                Add Stocks
+              </button>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Record sold packs</span>
+                <input
+                  className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                  min="1"
+                  onChange={(event) => setSellQty(event.target.value)}
+                  type="number"
+                  value={sellQty}
+                />
+              </label>
+              <button
+                className="h-12 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
+                onClick={() => updateAccount("sell", sellQty)}
+                type="button"
+              >
+                Record Sale
+              </button>
+              {accountStatus && <p className="text-sm text-zinc-300">{accountStatus}</p>}
+            </div>
           )}
         </section>
       </section>
+
+      <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-3 pt-2 backdrop-blur">
+        <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
+          {[
+            { icon: ClipboardList, id: "orders" as const, label: "Orders" },
+            { icon: Package, id: "stocks" as const, label: "Stocks" },
+          ].map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                className={`flex h-12 items-center justify-center gap-2 rounded-[8px] text-sm font-semibold ${
+                  isActive
+                    ? "bg-emerald-300 text-zinc-950"
+                    : "border border-zinc-800 bg-zinc-900 text-zinc-300"
+                }`}
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                type="button"
+              >
+                <Icon aria-hidden="true" size={18} />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </main>
   );
 }

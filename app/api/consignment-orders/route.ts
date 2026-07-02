@@ -48,6 +48,22 @@ async function ensureTable() {
   `);
 }
 
+async function ensureAccountTable() {
+  await pool.query(`
+    create table if not exists siomai_consignment_accounts (
+      customer_name text primary key,
+      pin_code text,
+      current_stocks integer not null default 0,
+      sold_stocks integer not null default 0,
+      updated_at timestamptz not null default now()
+    )
+  `);
+  await pool.query(`
+    alter table siomai_consignment_accounts
+    add column if not exists pin_code text
+  `);
+}
+
 function toOrder(row: {
   id: string;
   customer_name: string;
@@ -77,6 +93,7 @@ export async function GET() {
   }
 
   await ensureTable();
+  await ensureAccountTable();
   const result = await pool.query(`
     select id, customer_name, packs, request_date, notes, status, created_at
     from siomai_consignment_orders
@@ -96,15 +113,35 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as Partial<ConsignmentOrder>;
   const customerName = String(body.customerName ?? "").trim();
+  const pinCode = String((body as { pinCode?: string }).pinCode ?? "").trim();
   const packs = Number(body.packs);
   const requestDate = String(body.requestDate ?? "").trim();
   const notes = String(body.notes ?? "").trim();
 
-  if (!customerName || !Number.isFinite(packs) || packs <= 0 || !requestDate) {
+  if (
+    !customerName ||
+    !/^\d{4}$/.test(pinCode) ||
+    !Number.isFinite(packs) ||
+    packs <= 0 ||
+    !requestDate
+  ) {
     return Response.json({ error: "Invalid order request." }, { status: 400 });
   }
 
   await ensureTable();
+  const accountCheck = await pool.query(
+    `
+      select customer_name
+      from siomai_consignment_accounts
+      where lower(customer_name) = lower($1) and pin_code = $2
+    `,
+    [customerName, pinCode],
+  );
+
+  if (accountCheck.rowCount === 0) {
+    return Response.json({ error: "Invalid name or PIN." }, { status: 401 });
+  }
+
   const result = await pool.query(
     `
       insert into siomai_consignment_orders

@@ -8,6 +8,7 @@ import {
   Factory,
   History,
   Home as HomeIcon,
+  KeyRound,
   Minus,
   Package,
   Plus,
@@ -49,6 +50,7 @@ type ConsignmentOrder = {
 type ConsignmentAccount = {
   customerName: string;
   currentStocks: number;
+  pinCode?: string;
   soldStocks: number;
   updatedAt: string;
 };
@@ -148,6 +150,9 @@ export default function Home() {
   const [history, setHistory] = useState<ProductionRecord[]>([]);
   const [consignmentOrders, setConsignmentOrders] = useState<ConsignmentOrder[]>([]);
   const [consignmentAccounts, setConsignmentAccounts] = useState<ConsignmentAccount[]>([]);
+  const [newConsignmentName, setNewConsignmentName] = useState("");
+  const [newConsignmentPin, setNewConsignmentPin] = useState("");
+  const [consignmentPinStatus, setConsignmentPinStatus] = useState("");
   const [showOrders, setShowOrders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Loading database");
@@ -263,6 +268,39 @@ export default function Home() {
     if (response.ok) {
       await loadConsignmentOrders();
     }
+  }
+
+  function generatePin() {
+    setNewConsignmentPin(String(Math.floor(1000 + Math.random() * 9000)));
+    setConsignmentPinStatus("");
+  }
+
+  async function saveConsignmentPin() {
+    const customerName = newConsignmentName.trim();
+    if (!customerName || !/^\d{4}$/.test(newConsignmentPin)) {
+      setConsignmentPinStatus("Enter consignee name and 4-digit PIN.");
+      return;
+    }
+
+    const response = await fetch("/api/consignment-accounts", {
+      body: JSON.stringify({
+        action: "create",
+        customerName,
+        pinCode: newConsignmentPin,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      setConsignmentPinStatus("Unable to save PIN.");
+      return;
+    }
+
+    setConsignmentPinStatus(`PIN saved for ${customerName}.`);
+    setNewConsignmentName("");
+    setNewConsignmentPin("");
+    await loadConsignmentAccounts();
   }
 
   async function loadConfig() {
@@ -532,6 +570,49 @@ export default function Home() {
                   Refresh
                 </button>
               </div>
+              <div className="mb-4 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3">
+                <div className="mb-3 flex items-center gap-2">
+                  <KeyRound aria-hidden="true" className="text-emerald-300" size={17} />
+                  <h3 className="text-sm font-semibold text-white">Consignee PIN</h3>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-[1fr_110px_auto]">
+                  <input
+                    className="h-11 rounded-[8px] border border-zinc-700 bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-300"
+                    onChange={(event) => setNewConsignmentName(event.target.value)}
+                    placeholder="Consignee name"
+                    value={newConsignmentName}
+                  />
+                  <input
+                    className="h-11 rounded-[8px] border border-zinc-700 bg-zinc-950 px-3 text-center text-sm font-semibold tracking-[0.2em] outline-none focus:border-emerald-300"
+                    inputMode="numeric"
+                    maxLength={4}
+                    onChange={(event) =>
+                      setNewConsignmentPin(event.target.value.replace(/\D/g, "").slice(0, 4))
+                    }
+                    placeholder="PIN"
+                    value={newConsignmentPin}
+                  />
+                  <div className="grid grid-cols-2 gap-2 sm:flex">
+                    <button
+                      className="h-11 rounded-[8px] border border-zinc-700 px-3 text-sm font-semibold text-zinc-200"
+                      onClick={generatePin}
+                      type="button"
+                    >
+                      Generate
+                    </button>
+                    <button
+                      className="h-11 rounded-[8px] bg-emerald-300 px-3 text-sm font-semibold text-zinc-950"
+                      onClick={() => void saveConsignmentPin()}
+                      type="button"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+                {consignmentPinStatus && (
+                  <p className="mt-2 text-xs text-zinc-400">{consignmentPinStatus}</p>
+                )}
+              </div>
               <div className="grid gap-2">
                 {consignmentOrders.length === 0 && (
                   <p className="text-sm text-zinc-400">No requests yet.</p>
@@ -590,6 +671,7 @@ export default function Home() {
                         </p>
                         <p className="text-xs text-zinc-500">
                           sold {account.soldStocks}
+                          {account.pinCode ? ` - PIN ${account.pinCode}` : ""}
                         </p>
                       </div>
                       <p className="font-semibold text-emerald-300">

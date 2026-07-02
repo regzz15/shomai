@@ -1,5 +1,11 @@
-const CACHE_NAME = "siomai-production-v2";
-const APP_SHELL = ["/", "/icon.svg", "/manifest.webmanifest"];
+const CACHE_NAME = "siomai-production-v3";
+const APP_SHELL = [
+  "/",
+  "/consignment",
+  "/icon.svg",
+  "/manifest.webmanifest",
+  "/consignment/manifest.webmanifest",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
