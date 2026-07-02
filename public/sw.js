@@ -1,4 +1,4 @@
-const CACHE_NAME = "shomai-production-v1";
+const CACHE_NAME = "siomai-production-v2";
 const APP_SHELL = ["/", "/icon.svg", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

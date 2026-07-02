@@ -374,7 +374,7 @@ export default function Home() {
                   Production
                 </p>
                 <h1 className="text-xl font-semibold tracking-normal text-white">
-                  Shomai
+                  Siomai
                 </h1>
               </div>
             </div>

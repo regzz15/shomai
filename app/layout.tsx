@@ -18,10 +18,10 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Shomai",
+    title: "Siomai",
   },
-  title: "Shomai Production",
-  description: "Production dashboard for Shomai",
+  title: "Siomai Production",
+  description: "Production dashboard for Siomai",
   icons: {
     apple: "/icon.svg",
     icon: "/icon.svg",
