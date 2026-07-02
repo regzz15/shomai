@@ -33,19 +33,17 @@ export default function ConsignmentPage() {
   const [sellQty, setSellQty] = useState("");
   const [accountStatus, setAccountStatus] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const needsNameSetup = Boolean(account?.customerName.startsWith("Pending "));
 
   async function loadAccount(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
-    const trimmedName = customerName.trim();
-    if (!trimmedName || !/^\d{4}$/.test(pinCode)) {
-      setAccountStatus("Enter your name and 4-digit PIN.");
+    if (!/^\d{4}$/.test(pinCode)) {
+      setAccountStatus("Enter your 4-digit PIN.");
       return;
     }
 
     setIsLoading(true);
-    const response = await fetch(
-      `/api/consignment-accounts?customerName=${encodeURIComponent(trimmedName)}&pinCode=${encodeURIComponent(pinCode)}`,
-    );
+    const response = await fetch(`/api/consignment-accounts?pinCode=${encodeURIComponent(pinCode)}`);
     setIsLoading(false);
 
     if (!response.ok) {
@@ -59,9 +57,37 @@ export default function ConsignmentPage() {
     setStatus("");
   }
 
+  async function saveAccountName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedName = customerName.trim();
+    if (!trimmedName || !/^\d{4}$/.test(pinCode)) {
+      setAccountStatus("Enter your account name.");
+      return;
+    }
+
+    const response = await fetch("/api/consignment-accounts", {
+      body: JSON.stringify({
+        action: "claim",
+        customerName: trimmedName,
+        pinCode,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      setAccountStatus("Unable to save account name.");
+      return;
+    }
+
+    const data = (await response.json()) as { account: ConsignmentAccount };
+    setAccount(data.account);
+    setAccountStatus("");
+  }
+
   async function updateAccount(action: "receive" | "sell", quantityText: string) {
     const quantity = Number(quantityText);
-    const trimmedName = customerName.trim();
+    const trimmedName = account?.customerName ?? "";
     if (!trimmedName || !/^\d{4}$/.test(pinCode) || !Number.isFinite(quantity) || quantity <= 0) {
       setAccountStatus("Enter a valid quantity.");
       return;
@@ -96,7 +122,7 @@ export default function ConsignmentPage() {
 
     const response = await fetch("/api/consignment-orders", {
       body: JSON.stringify({
-        customerName,
+        customerName: account?.customerName ?? "",
         notes,
         packs: Number(packs),
         pinCode,
@@ -118,6 +144,7 @@ export default function ConsignmentPage() {
 
   function logout() {
     setAccount(null);
+    setCustomerName("");
     setPinCode("");
     setPacks("");
     setNotes("");
@@ -145,15 +172,6 @@ export default function ConsignmentPage() {
             className="grid gap-4 rounded-[8px] border border-zinc-800 bg-zinc-900 p-4 shadow-xl shadow-black/30"
             onSubmit={loadAccount}
           >
-            <label className="grid gap-2">
-              <span className="text-sm text-zinc-300">Name</span>
-              <input
-                className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
-                onChange={(event) => setCustomerName(event.target.value)}
-                required
-                value={customerName}
-              />
-            </label>
             <label className="grid gap-2">
               <span className="text-sm text-zinc-300">4-digit PIN</span>
               <input
@@ -183,6 +201,42 @@ export default function ConsignmentPage() {
   }
 
   const currentAccount = account;
+
+  if (needsNameSetup) {
+    return (
+      <main className="min-h-screen bg-zinc-950 px-4 py-5 text-zinc-50">
+        <section className="mx-auto grid min-h-[calc(100vh-40px)] max-w-md content-center gap-5">
+          <div>
+            <p className="text-sm font-medium text-emerald-300">Account Setup</p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-normal text-white">
+              Create Your Name
+            </h1>
+          </div>
+          <form
+            className="grid gap-4 rounded-[8px] border border-zinc-800 bg-zinc-900 p-4 shadow-xl shadow-black/30"
+            onSubmit={saveAccountName}
+          >
+            <label className="grid gap-2">
+              <span className="text-sm text-zinc-300">Your name</span>
+              <input
+                className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                onChange={(event) => setCustomerName(event.target.value)}
+                required
+                value={customerName}
+              />
+            </label>
+            <button
+              className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+              type="submit"
+            >
+              Save Account
+            </button>
+            {accountStatus && <p className="text-sm text-zinc-300">{accountStatus}</p>}
+          </form>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-50">

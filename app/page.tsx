@@ -27,7 +27,7 @@ const stockStorageKey = "shomai-current-stocks";
 const productionStorageKey = "shomai-production-today";
 const historyStorageKey = "shomai-production-history";
 
-type Tab = "dashboard" | "production" | "release" | "reports" | "history";
+type Tab = "dashboard" | "production" | "release" | "consignment" | "reports" | "history";
 
 type ProductionRecord = {
   date: string;
@@ -158,7 +158,6 @@ export default function Home() {
   const [history, setHistory] = useState<ProductionRecord[]>([]);
   const [consignmentOrders, setConsignmentOrders] = useState<ConsignmentOrder[]>([]);
   const [consignmentAccounts, setConsignmentAccounts] = useState<ConsignmentAccount[]>([]);
-  const [newConsignmentName, setNewConsignmentName] = useState("");
   const [newConsignmentPin, setNewConsignmentPin] = useState("");
   const [consignmentPinStatus, setConsignmentPinStatus] = useState("");
   const [showOrders, setShowOrders] = useState(false);
@@ -292,16 +291,14 @@ export default function Home() {
   }
 
   async function saveConsignmentPin() {
-    const customerName = newConsignmentName.trim();
-    if (!customerName || !/^\d{4}$/.test(newConsignmentPin)) {
-      setConsignmentPinStatus("Enter consignee name and 4-digit PIN.");
+    if (!/^\d{4}$/.test(newConsignmentPin)) {
+      setConsignmentPinStatus("Generate a 4-digit PIN first.");
       return;
     }
 
     const response = await fetch("/api/consignment-accounts", {
       body: JSON.stringify({
         action: "create",
-        customerName,
         pinCode: newConsignmentPin,
       }),
       headers: { "Content-Type": "application/json" },
@@ -313,8 +310,7 @@ export default function Home() {
       return;
     }
 
-    setConsignmentPinStatus(`PIN saved for ${customerName}.`);
-    setNewConsignmentName("");
+    setConsignmentPinStatus(`PIN ${newConsignmentPin} is ready for consignee login.`);
     setNewConsignmentPin("");
     await loadConsignmentAccounts();
   }
@@ -585,49 +581,6 @@ export default function Home() {
                 >
                   Refresh
                 </button>
-              </div>
-              <div className="mb-4 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3">
-                <div className="mb-3 flex items-center gap-2">
-                  <KeyRound aria-hidden="true" className="text-emerald-300" size={17} />
-                  <h3 className="text-sm font-semibold text-white">Consignee PIN</h3>
-                </div>
-                <div className="grid gap-2 sm:grid-cols-[1fr_110px_auto]">
-                  <input
-                    className="h-11 rounded-[8px] border border-zinc-700 bg-zinc-950 px-3 text-sm outline-none focus:border-emerald-300"
-                    onChange={(event) => setNewConsignmentName(event.target.value)}
-                    placeholder="Consignee name"
-                    value={newConsignmentName}
-                  />
-                  <input
-                    className="h-11 rounded-[8px] border border-zinc-700 bg-zinc-950 px-3 text-center text-sm font-semibold tracking-[0.2em] outline-none focus:border-emerald-300"
-                    inputMode="numeric"
-                    maxLength={4}
-                    onChange={(event) =>
-                      setNewConsignmentPin(event.target.value.replace(/\D/g, "").slice(0, 4))
-                    }
-                    placeholder="PIN"
-                    value={newConsignmentPin}
-                  />
-                  <div className="grid grid-cols-2 gap-2 sm:flex">
-                    <button
-                      className="h-11 rounded-[8px] border border-zinc-700 px-3 text-sm font-semibold text-zinc-200"
-                      onClick={generatePin}
-                      type="button"
-                    >
-                      Generate
-                    </button>
-                    <button
-                      className="h-11 rounded-[8px] bg-emerald-300 px-3 text-sm font-semibold text-zinc-950"
-                      onClick={() => void saveConsignmentPin()}
-                      type="button"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-                {consignmentPinStatus && (
-                  <p className="mt-2 text-xs text-zinc-400">{consignmentPinStatus}</p>
-                )}
               </div>
               <div className="grid gap-2">
                 {consignmentOrders.length === 0 && (
@@ -910,6 +863,100 @@ export default function Home() {
             </div>
           )}
 
+          {activeTab === "consignment" && (
+            <div className="grid gap-3 lg:grid-cols-[0.8fr_1.2fr]">
+              <Panel icon={KeyRound} title="Generate PIN">
+                <div className="grid gap-4">
+                  <div className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-4">
+                    <p className="text-sm text-zinc-400">New consignee PIN</p>
+                    <p className="mt-2 text-4xl font-semibold tracking-[0.25em] text-emerald-300">
+                      {newConsignmentPin || "----"}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      className="h-12 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
+                      onClick={generatePin}
+                      type="button"
+                    >
+                      Generate
+                    </button>
+                    <button
+                      className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+                      onClick={() => void saveConsignmentPin()}
+                      type="button"
+                    >
+                      Save PIN
+                    </button>
+                  </div>
+                  {consignmentPinStatus && (
+                    <p className="text-sm text-zinc-300">{consignmentPinStatus}</p>
+                  )}
+                </div>
+              </Panel>
+
+              <Panel icon={UserRound} title="Consignment Stocks">
+                <div className="grid gap-3">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <SmallMetric label="Accounts" value={consignmentAccounts.length} />
+                    <SmallMetric
+                      label="Stocks"
+                      tone="emerald"
+                      value={consignmentStocksTotal}
+                    />
+                    <SmallMetric label="Pieces" value={consignmentStocksTotal * piecesPerStock} />
+                    <SmallMetric label="Sold" value={consignmentSoldTotal} />
+                  </div>
+                  <button
+                    className="h-11 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
+                    onClick={() => void loadConsignmentAccounts()}
+                    type="button"
+                  >
+                    Refresh
+                  </button>
+                  <div className="grid gap-2">
+                    {consignmentStockRows.length === 0 && (
+                      <p className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-400">
+                        No consignment accounts yet.
+                      </p>
+                    )}
+                    {consignmentStockRows.map((account) => (
+                      <article
+                        className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3"
+                        key={account.pinCode || account.customerName}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate font-semibold text-white">
+                              {account.customerName.startsWith("Pending ")
+                                ? "Waiting for account name"
+                                : account.customerName}
+                            </h3>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              PIN {account.pinCode || "----"} - {formatDateTime(account.updatedAt)}
+                            </p>
+                          </div>
+                          <span className="rounded-[8px] bg-emerald-300 px-3 py-1 text-sm font-semibold text-zinc-950">
+                            {account.currentStocks}
+                          </span>
+                        </div>
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          <SmallMetric label="Stocks" value={account.currentStocks} />
+                          <SmallMetric
+                            label="Pieces"
+                            tone="emerald"
+                            value={account.currentStocks * piecesPerStock}
+                          />
+                          <SmallMetric label="Sold" value={account.soldStocks} />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </Panel>
+            </div>
+          )}
+
           {activeTab === "reports" && (
             <div className="grid gap-3">
               <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
@@ -1091,13 +1138,14 @@ function BottomNav({
     { icon: HomeIcon, id: "dashboard" as Tab, label: "Home" },
     { icon: Plus, id: "production" as Tab, label: "Make" },
     { icon: Send, id: "release" as Tab, label: "Release" },
+    { icon: UserRound, id: "consignment" as Tab, label: "Consign" },
     { icon: ReceiptText, id: "reports" as Tab, label: "Sales" },
     { icon: History, id: "history" as Tab, label: "History" },
   ];
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 shadow-2xl shadow-black/40 backdrop-blur sm:sticky sm:bottom-auto sm:mx-auto sm:mb-4 sm:max-w-3xl sm:rounded-[8px] sm:border">
-      <div className="mx-auto grid max-w-lg grid-cols-5 gap-1.5">
+      <div className="mx-auto grid max-w-lg grid-cols-6 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
           const selected = activeTab === item.id;
@@ -1105,7 +1153,7 @@ function BottomNav({
           return (
             <button
               aria-label={item.label}
-              className={`grid h-14 place-items-center rounded-[8px] text-xs font-medium transition-colors ${
+              className={`grid h-14 place-items-center rounded-[8px] text-[11px] font-medium transition-colors sm:text-xs ${
                 selected
                   ? "bg-emerald-300 text-zinc-950"
                   : "text-zinc-400 hover:bg-zinc-900 hover:text-white"

@@ -66,6 +66,14 @@ function isValidPin(pinCode: string) {
   return /^\d{4}$/.test(pinCode);
 }
 
+function getPendingName(pinCode: string) {
+  return `Pending ${pinCode}`;
+}
+
+function isPendingName(customerName: string) {
+  return customerName.startsWith("Pending ");
+}
+
 export async function GET(request: Request) {
   if (!connectionString) {
     return Response.json(
@@ -80,7 +88,7 @@ export async function GET(request: Request) {
 
   await ensureTable();
 
-  if (!customerName) {
+  if (!customerName && !pinCode) {
     const result = await pool.query(`
       select customer_name, pin_code, current_stocks, sold_stocks, updated_at
       from siomai_consignment_accounts
@@ -95,12 +103,18 @@ export async function GET(request: Request) {
   }
 
   const result = await pool.query(
-    `
-      select customer_name, pin_code, current_stocks, sold_stocks, updated_at
-      from siomai_consignment_accounts
-      where lower(customer_name) = lower($1) and pin_code = $2
-    `,
-    [customerName, pinCode],
+    customerName
+      ? `
+        select customer_name, pin_code, current_stocks, sold_stocks, updated_at
+        from siomai_consignment_accounts
+        where lower(customer_name) = lower($1) and pin_code = $2
+      `
+      : `
+        select customer_name, pin_code, current_stocks, sold_stocks, updated_at
+        from siomai_consignment_accounts
+        where pin_code = $1
+      `,
+    customerName ? [customerName, pinCode] : [pinCode],
   );
 
   if (result.rowCount === 0) {
@@ -119,7 +133,7 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json()) as {
-    action?: "create" | "receive" | "sell";
+    action?: "claim" | "create" | "receive" | "sell";
     customerName?: string;
     pinCode?: string;
     quantity?: number;
@@ -128,7 +142,7 @@ export async function POST(request: Request) {
   const pinCode = String(body.pinCode ?? "").trim();
   const quantity = Number(body.quantity);
 
-  if (!customerName || !body.action) {
+  if (!body.action) {
     return Response.json({ error: "Invalid account update." }, { status: 400 });
   }
 
@@ -139,6 +153,20 @@ export async function POST(request: Request) {
       return Response.json({ error: "PIN must be 4 digits." }, { status: 400 });
     }
 
+    const existingPin = await pool.query(
+      `
+        select customer_name
+        from siomai_consignment_accounts
+        where pin_code = $1
+      `,
+      [pinCode],
+    );
+
+    if ((existingPin.rowCount ?? 0) > 0) {
+      return Response.json({ error: "PIN already exists." }, { status: 409 });
+    }
+
+    const pendingName = customerName || getPendingName(pinCode);
     const result = await pool.query(
       `
         insert into siomai_consignment_accounts (customer_name, pin_code)
@@ -148,13 +176,59 @@ export async function POST(request: Request) {
             updated_at = now()
         returning customer_name, pin_code, current_stocks, sold_stocks, updated_at
       `,
-      [customerName, pinCode],
+      [pendingName, pinCode],
     );
 
     return Response.json({ account: toAccount(result.rows[0], true) });
   }
 
-  if (!isValidPin(pinCode) || !Number.isFinite(quantity) || quantity <= 0) {
+  if (body.action === "claim") {
+    if (!customerName || !isValidPin(pinCode)) {
+      return Response.json({ error: "Invalid account claim." }, { status: 400 });
+    }
+
+    const existingName = await pool.query(
+      `
+        select customer_name
+        from siomai_consignment_accounts
+        where lower(customer_name) = lower($1) and pin_code <> $2
+      `,
+      [customerName, pinCode],
+    );
+
+    if ((existingName.rowCount ?? 0) > 0) {
+      return Response.json({ error: "Name already exists." }, { status: 409 });
+    }
+
+    const currentAccount = await pool.query(
+      `
+        select customer_name
+        from siomai_consignment_accounts
+        where pin_code = $1
+      `,
+      [pinCode],
+    );
+    const currentName = String(currentAccount.rows[0]?.customer_name ?? "");
+
+    if (!currentName || (!isPendingName(currentName) && currentName.toLowerCase() !== customerName.toLowerCase())) {
+      return Response.json({ error: "PIN is already claimed." }, { status: 409 });
+    }
+
+    const result = await pool.query(
+      `
+        update siomai_consignment_accounts
+        set customer_name = $2,
+            updated_at = now()
+        where pin_code = $1
+        returning customer_name, pin_code, current_stocks, sold_stocks, updated_at
+      `,
+      [pinCode, customerName],
+    );
+
+    return Response.json({ account: toAccount(result.rows[0]) });
+  }
+
+  if (!customerName || !isValidPin(pinCode) || !Number.isFinite(quantity) || quantity <= 0) {
     return Response.json({ error: "Invalid account update." }, { status: 400 });
   }
 
