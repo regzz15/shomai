@@ -27,7 +27,7 @@ self.addEventListener("message", (event) => {
       badge: "/icon.svg",
       body: event.data.body || "Open production to review the request.",
       data: {
-        url: "/",
+        url: event.data.url || "/?tab=orders",
       },
       icon: "/icon.svg",
       tag: event.data.tag || "siomai-consignment-order",
@@ -106,15 +106,21 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const targetUrl = new URL(event.notification.data?.url || "/", self.location.origin).href;
+  const targetUrl = new URL(event.notification.data?.url || "/?tab=orders", self.location.origin).href;
 
   event.waitUntil(
     self.clients
       .matchAll({ includeUncontrolled: true, type: "window" })
       .then((clients) => {
-        const existingClient = clients.find((client) => client.url === targetUrl);
+        const existingClient =
+          clients.find((client) => client.url === targetUrl) ||
+          clients.find((client) => new URL(client.url).origin === self.location.origin);
 
         if (existingClient) {
+          if ("navigate" in existingClient) {
+            return existingClient.navigate(targetUrl).then((client) => client?.focus());
+          }
+
           return existingClient.focus();
         }
 

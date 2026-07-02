@@ -28,7 +28,7 @@ const stockStorageKey = "shomai-current-stocks";
 const productionStorageKey = "shomai-production-today";
 const historyStorageKey = "shomai-production-history";
 
-type Tab = "dashboard" | "production" | "release" | "consignment" | "history";
+type Tab = "dashboard" | "orders" | "production" | "release" | "consignment" | "history";
 type SalesTab = "release" | "stocks" | "summary" | "report";
 
 type ProductionRecord = {
@@ -212,13 +212,15 @@ export default function Home() {
   const activeTitle =
     activeTab === "dashboard"
       ? "Dashboard"
-      : activeTab === "production"
-        ? "Production"
-        : activeTab === "release"
-          ? "Release & Sales"
-          : activeTab === "consignment"
-            ? "Consignment"
-            : "History";
+      : activeTab === "orders"
+        ? "Orders"
+        : activeTab === "production"
+          ? "Production"
+          : activeTab === "release"
+            ? "Release & Sales"
+            : activeTab === "consignment"
+              ? "Consignment"
+              : "History";
   const reviewedRecord = history.find((record) => record.date === reviewDate);
   const reportDayRecord = history.find((record) => record.date === reportDate);
   const recentHistory = useMemo(() => sortHistory(history).slice(0, 5), [history]);
@@ -285,6 +287,12 @@ export default function Home() {
 
   // localStorage hydration needs to update client state after mount.
   useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab === "orders") {
+      setActiveTab("orders");
+      setShowOrders(false);
+    }
+
     loadRecords();
     loadConfig();
     loadConsignmentOrders();
@@ -393,6 +401,7 @@ export default function Home() {
         tag: `consignment-order-${newestOrder.id}`,
         title,
         type: "SHOW_ORDER_NOTIFICATION",
+        url: "/?tab=orders",
       });
       return;
     }
@@ -748,6 +757,9 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2">
+              <div className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs font-medium text-zinc-300">
+                {formatDisplayDate(todayKey)}
+              </div>
               <button
                 className="relative grid h-10 w-10 place-items-center rounded-[8px] border border-zinc-800 bg-zinc-950 text-zinc-300"
                 onClick={() => setShowOrders((current) => !current)}
@@ -760,77 +772,49 @@ export default function Home() {
                   </span>
                 )}
               </button>
-              <div className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs font-medium text-zinc-300">
-                {formatDisplayDate(todayKey)}
-              </div>
             </div>
           </div>
         </header>
 
         <section className="min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20 sm:p-6">
           {showOrders && (
-            <section className="fixed inset-x-3 top-[76px] z-40 mx-auto max-h-[calc(100vh-120px)] max-w-2xl overflow-y-auto rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 shadow-2xl shadow-black/50 sm:top-[88px]">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-semibold text-white">Pending Requests</h2>
-                <div className="flex items-center gap-2">
-                  <button
-                    className="rounded-[8px] border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200"
-                    onClick={() => void requestOrderNotifications()}
-                    type="button"
-                  >
-                    {notificationStatus}
-                  </button>
-                  <button
-                    className="text-sm text-emerald-300"
-                    onClick={() => {
-                      void loadConsignmentOrders();
-                      void loadConsignmentAccounts();
-                    }}
-                    type="button"
-                  >
-                    Refresh
-                  </button>
+            <div
+              className="fixed inset-0 z-40 bg-black/45 px-3 pt-[76px] backdrop-blur-sm sm:pt-[88px]"
+              onClick={() => setShowOrders(false)}
+            >
+              <section
+                className="mx-auto max-h-[calc(100vh-120px)] max-w-2xl overflow-y-auto rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 shadow-2xl shadow-black/50"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="font-semibold text-white">Pending Requests</h2>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="rounded-[8px] border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200"
+                      onClick={() => void requestOrderNotifications()}
+                      type="button"
+                    >
+                      {notificationStatus}
+                    </button>
+                    <button
+                      className="text-sm text-emerald-300"
+                      onClick={() => {
+                        setActiveTab("orders");
+                        setShowOrders(false);
+                      }}
+                      type="button"
+                    >
+                      Open Orders
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="grid gap-2">
-                {consignmentOrders.length === 0 && (
-                  <p className="text-sm text-zinc-400">No requests yet.</p>
-                )}
-                {consignmentOrders.slice(0, 8).map((order) => (
-                  <article
-                    className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3"
-                    key={order.id}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-white">
-                          {order.customerName}
-                        </p>
-                        <p className="text-sm text-zinc-400">
-                          {order.packs} packs - {formatDisplayDate(order.requestDate)}
-                        </p>
-                        {order.notes && (
-                          <p className="mt-1 text-sm text-zinc-300">{order.notes}</p>
-                        )}
-                      </div>
-                      <span className="rounded-[8px] border border-zinc-700 px-2 py-1 text-xs text-zinc-300">
-                        {order.status}
-                      </span>
-                    </div>
-                    {order.status === "pending" && (
-                      <button
-                        className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
-                        onClick={() => updateConsignmentOrder(order.id, "accepted")}
-                        type="button"
-                      >
-                        <Check aria-hidden="true" size={16} />
-                        Accept
-                      </button>
-                    )}
-                  </article>
-                ))}
-              </div>
-            </section>
+                <OrderList
+                  formatDisplayDate={formatDisplayDate}
+                  orders={consignmentOrders.slice(0, 8)}
+                  updateConsignmentOrder={updateConsignmentOrder}
+                />
+              </section>
+            </div>
           )}
           <div className="mb-3 flex items-center justify-between gap-3 rounded-[8px] border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300 sm:text-sm">
             <span>{syncStatus}</span>
@@ -885,6 +869,33 @@ export default function Home() {
                   </div>
                 </Panel>
               </div>
+            </div>
+          )}
+
+          {activeTab === "orders" && (
+            <div className="grid gap-3">
+              <section className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-semibold text-white">Orders</h2>
+                    <p className="mt-1 text-sm text-zinc-400">
+                      Consignment requests from the consignee app.
+                    </p>
+                  </div>
+                  <button
+                    className="h-10 rounded-[8px] border border-zinc-700 px-3 text-sm font-semibold text-zinc-200"
+                    onClick={() => void loadConsignmentOrders()}
+                    type="button"
+                  >
+                    Refresh
+                  </button>
+                </div>
+              </section>
+              <OrderList
+                formatDisplayDate={formatDisplayDate}
+                orders={consignmentOrders}
+                updateConsignmentOrder={updateConsignmentOrder}
+              />
             </div>
           )}
 
@@ -1362,6 +1373,7 @@ function BottomNav({
 }) {
   const items = [
     { icon: HomeIcon, id: "dashboard" as Tab, label: "Dashboard" },
+    { icon: Bell, id: "orders" as Tab, label: "Orders" },
     { icon: Plus, id: "production" as Tab, label: "Produce" },
     { icon: Send, id: "release" as Tab, label: "Sales" },
     { icon: UserRound, id: "consignment" as Tab, label: "Consign" },
@@ -1370,7 +1382,7 @@ function BottomNav({
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 shadow-2xl shadow-black/40 backdrop-blur sm:sticky sm:bottom-auto sm:mx-auto sm:mb-4 sm:max-w-3xl sm:rounded-[8px] sm:border">
-      <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
+      <div className="mx-auto grid max-w-lg grid-cols-6 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
           const selected = activeTab === item.id;
@@ -1394,6 +1406,62 @@ function BottomNav({
         })}
       </div>
     </nav>
+  );
+}
+
+function OrderList({
+  formatDisplayDate,
+  orders,
+  updateConsignmentOrder,
+}: {
+  formatDisplayDate: (date: string) => string;
+  orders: ConsignmentOrder[];
+  updateConsignmentOrder: (
+    id: string,
+    status: ConsignmentOrder["status"],
+  ) => Promise<void>;
+}) {
+  return (
+    <div className="grid gap-2">
+      {orders.length === 0 && (
+        <p className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-400">
+          No requests yet.
+        </p>
+      )}
+      {orders.map((order) => (
+        <article
+          className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-3"
+          key={order.id}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate font-semibold text-white">
+                {order.customerName}
+              </p>
+              <p className="text-sm text-zinc-400">
+                {order.packs} packs - {formatDisplayDate(order.requestDate)}
+              </p>
+              {order.notes && (
+                <p className="mt-1 text-sm text-zinc-300">{order.notes}</p>
+              )}
+            </div>
+            <span className="rounded-[8px] border border-zinc-700 px-2 py-1 text-xs text-zinc-300">
+              {order.status}
+            </span>
+          </div>
+          {order.status === "pending" && (
+            <button
+              className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+              onClick={() => void updateConsignmentOrder(order.id, "accepted")}
+              type="button"
+            >
+              <Check aria-hidden="true" size={16} />
+              Accept
+            </button>
+          )}
+        </article>
+      ))}
+    </div>
   );
 }
 

@@ -122,7 +122,7 @@ async function sendOrderPushNotification(order: ConsignmentOrder) {
     body: `${order.customerName} requested ${order.packs} packs for ${order.requestDate}.`,
     tag: `consignment-order-${order.id}`,
     title: "New consignment order",
-    url: "/",
+    url: "/?tab=orders",
   });
 
   await Promise.allSettled(
