@@ -94,6 +94,14 @@ function formatDisplayDate(date: string) {
   }).format(new Date(`${date}T00:00:00+08:00`));
 }
 
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Asia/Singapore",
+  }).format(new Date(value));
+}
+
 function sortHistory(history: ProductionRecord[]) {
   return [...history].sort((a, b) => b.date.localeCompare(a.date));
 }
@@ -199,6 +207,14 @@ export default function Home() {
   const consignmentSoldTotal = consignmentAccounts.reduce(
     (total, account) => total + account.soldStocks,
     0,
+  );
+  const consignmentStockRows = useMemo(
+    () =>
+      [...consignmentAccounts].sort((a, b) => {
+        const stockDifference = b.currentStocks - a.currentStocks;
+        return stockDifference || a.customerName.localeCompare(b.customerName);
+      }),
+    [consignmentAccounts],
   );
 
   function updateOrderType(nextOrderType: OrderType) {
@@ -556,7 +572,7 @@ export default function Home() {
 
         <section className="min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20 sm:p-6">
           {showOrders && (
-            <section className="mb-3 rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
+            <section className="fixed inset-x-3 top-[76px] z-40 mx-auto max-h-[calc(100vh-120px)] max-w-2xl overflow-y-auto rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 shadow-2xl shadow-black/50 sm:top-[88px]">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="font-semibold text-white">Consignment Requests</h2>
                 <button
@@ -895,59 +911,113 @@ export default function Home() {
           )}
 
           {activeTab === "reports" && (
-            <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
-              <Panel icon={ReceiptText} title="Sales Reports">
-                <div className="grid gap-4">
-                  <DateField
-                    label="Daily Sales Date"
-                    onChange={setReportDate}
-                    todayKey={todayKey}
-                    value={reportDate}
-                  />
-                  <label className="grid gap-2">
-                    <span className="text-sm font-medium text-zinc-300">
-                      Month
-                    </span>
-                    <input
-                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
-                      onChange={(event) => setReportMonth(event.target.value)}
-                      type="month"
-                      value={reportMonth}
+            <div className="grid gap-3">
+              <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+                <Panel icon={ReceiptText} title="Sales Reports">
+                  <div className="grid gap-4">
+                    <DateField
+                      label="Daily Sales Date"
+                      onChange={setReportDate}
+                      todayKey={todayKey}
+                      value={reportDate}
                     />
-                  </label>
-                  <label className="grid gap-2">
-                    <span className="text-sm font-medium text-zinc-300">
-                      Year
-                    </span>
-                    <input
-                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
-                      onChange={(event) => setReportYear(event.target.value)}
-                      type="number"
-                      value={reportYear}
-                    />
-                  </label>
-                </div>
-              </Panel>
+                    <label className="grid gap-2">
+                      <span className="text-sm font-medium text-zinc-300">
+                        Month
+                      </span>
+                      <input
+                        className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+                        onChange={(event) => setReportMonth(event.target.value)}
+                        type="month"
+                        value={reportMonth}
+                      />
+                    </label>
+                    <label className="grid gap-2">
+                      <span className="text-sm font-medium text-zinc-300">
+                        Year
+                      </span>
+                      <input
+                        className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+                        onChange={(event) => setReportYear(event.target.value)}
+                        type="number"
+                        value={reportYear}
+                      />
+                    </label>
+                  </div>
+                </Panel>
 
-              <Panel icon={BarChart3} title="Sales Summary">
+                <Panel icon={BarChart3} title="Sales Summary">
+                  <div className="grid gap-3">
+                    <SmallMetric
+                      label="Daily sales"
+                      tone="emerald"
+                      value={`PHP ${dailySales}`}
+                    />
+                    <SmallMetric
+                      label="Monthly sales"
+                      tone="emerald"
+                      value={`PHP ${monthlySales}`}
+                    />
+                    <SmallMetric
+                      label="Yearly sales"
+                      tone="emerald"
+                      value={`PHP ${yearlySales}`}
+                    />
+                    <SmallMetric label="Month released" value={monthlyReleased} />
+                    <SmallMetric label="Year released" value={yearlyReleased} />
+                  </div>
+                </Panel>
+              </div>
+
+              <Panel icon={UserRound} title="Consignment Stock Monitoring">
                 <div className="grid gap-3">
-                  <SmallMetric
-                    label="Daily sales"
-                    tone="emerald"
-                    value={`PHP ${dailySales}`}
-                  />
-                  <SmallMetric
-                    label="Monthly sales"
-                    tone="emerald"
-                    value={`PHP ${monthlySales}`}
-                  />
-                  <SmallMetric
-                    label="Yearly sales"
-                    tone="emerald"
-                    value={`PHP ${yearlySales}`}
-                  />
-                  <SmallMetric label="Month released" value={monthlyReleased} />
-                  <SmallMetric label="Year released" value={yearlyReleased} />
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <SmallMetric label="Accounts" value={consignmentAccounts.length} />
+                    <SmallMetric
+                      label="Total stocks"
+                      tone="emerald"
+                      value={consignmentStocksTotal}
+                    />
+                    <SmallMetric label="Total pcs" value={consignmentStocksTotal * piecesPerStock} />
+                    <SmallMetric label="Total sold" value={consignmentSoldTotal} />
+                  </div>
+
+                  <div className="grid gap-2">
+                    {consignmentStockRows.length === 0 && (
+                      <p className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-400">
+                        No consignment accounts yet.
+                      </p>
+                    )}
+                    {consignmentStockRows.map((account) => (
+                      <article
+                        className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3"
+                        key={account.customerName}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <h3 className="truncate font-semibold text-white">
+                              {account.customerName}
+                            </h3>
+                            <p className="mt-1 text-xs text-zinc-500">
+                              PIN {account.pinCode || "----"} - {formatDateTime(account.updatedAt)}
+                            </p>
+                          </div>
+                          <span className="rounded-[8px] bg-emerald-300 px-3 py-1 text-sm font-semibold text-zinc-950">
+                            {account.currentStocks}
+                          </span>
+                        </div>
+                        <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                          <SmallMetric label="Stocks" value={account.currentStocks} />
+                          <SmallMetric
+                            label="Pieces"
+                            tone="emerald"
+                            value={account.currentStocks * piecesPerStock}
+                          />
+                          <SmallMetric label="Sold" value={account.soldStocks} />
+                        </div>
+                      </article>
+                    ))}
+                  </div>
                 </div>
               </Panel>
             </div>
