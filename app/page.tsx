@@ -205,6 +205,16 @@ export default function Home() {
   const [reportMonth, setReportMonth] = useState(todayKey.slice(0, 7));
   const [reportYear, setReportYear] = useState(todayKey.slice(0, 4));
   const productionDate = formatDisplayDate(todayKey);
+  const activeTitle =
+    activeTab === "dashboard"
+      ? "Dashboard"
+      : activeTab === "production"
+        ? "Production"
+        : activeTab === "release"
+          ? "Release & Sales"
+          : activeTab === "consignment"
+            ? "Consignment"
+            : "History";
   const reviewedRecord = history.find((record) => record.date === reviewDate);
   const reportDayRecord = history.find((record) => record.date === reportDate);
   const recentHistory = useMemo(() => sortHistory(history).slice(0, 5), [history]);
@@ -688,7 +698,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="text-xs font-medium text-emerald-300">
-                  Production
+                  {activeTitle}
                 </p>
                 <h1 className="text-xl font-semibold tracking-normal text-white">
                   Siomai
@@ -720,7 +730,7 @@ export default function Home() {
           {showOrders && (
             <section className="fixed inset-x-3 top-[76px] z-40 mx-auto max-h-[calc(100vh-120px)] max-w-2xl overflow-y-auto rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 shadow-2xl shadow-black/50 sm:top-[88px]">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-semibold text-white">Consignment Requests</h2>
+                <h2 className="font-semibold text-white">Pending Requests</h2>
                 <div className="flex items-center gap-2">
                   <button
                     className="rounded-[8px] border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200"
@@ -779,36 +789,6 @@ export default function Home() {
                   </article>
                 ))}
               </div>
-              <div className="mt-4 border-t border-zinc-800 pt-4">
-                <h3 className="mb-2 text-sm font-semibold text-zinc-300">
-                  Consignment Stocks
-                </h3>
-                <div className="grid grid-cols-2 gap-2">
-                  <SmallMetric label="Total stocks" value={consignmentStocksTotal} />
-                  <SmallMetric label="Sales today" value={consignmentSalesToday} />
-                </div>
-                <div className="mt-3 grid gap-2">
-                  {consignmentAccounts.slice(0, 6).map((account) => (
-                    <div
-                      className="flex items-center justify-between gap-3 rounded-[8px] bg-zinc-900 px-3 py-2 text-sm"
-                      key={account.customerName}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-white">
-                          {account.customerName}
-                        </p>
-                        <p className="text-xs text-zinc-500">
-                          sales today {getConsignmentSalesForDate(account, todayKey)}
-                          {account.pinCode ? ` - PIN ${account.pinCode}` : ""}
-                        </p>
-                      </div>
-                      <p className="font-semibold text-emerald-300">
-                        {account.currentStocks}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
             </section>
           )}
           <div className="mb-3 flex items-center justify-between gap-3 rounded-[8px] border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300 sm:text-sm">
@@ -816,40 +796,53 @@ export default function Home() {
             {isSaving && <span className="text-emerald-300">Saving...</span>}
           </div>
           {activeTab === "dashboard" && (
-            <div className="grid h-full gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4 lg:content-start">
-                <MetricCard icon={Package} label="Stocks Today" value={currentStocks} />
-                <MetricCard
-                  icon={Package}
-                  label="Pieces Today"
-                  tone="emerald"
-                  value={currentPieces}
-                />
-                <MetricCard
-                  icon={Factory}
-                  label="Production Today"
-                  value={productionToday}
-                />
-                <MetricCard icon={UserRound} label="Released Today" value={releasedToday} />
-                <MetricCard
-                  icon={Package}
-                  label="Consignment Stocks"
-                  tone="emerald"
-                  value={consignmentStocksTotal}
-                />
+            <div className="grid gap-3">
+              <section className="grid gap-3 rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:grid-cols-[1fr_auto] sm:items-center sm:p-5">
+                <div>
+                  <div className="flex items-center gap-2 text-zinc-300">
+                    <CalendarDays aria-hidden="true" size={18} />
+                    <p className="text-sm font-medium">{productionDate}</p>
+                  </div>
+                  <h2 className="mt-2 text-2xl font-semibold text-white">
+                    Production Overview
+                  </h2>
+                </div>
+                <button
+                  className="flex h-11 items-center justify-center gap-2 rounded-[8px] border border-zinc-700 px-4 text-sm font-semibold text-zinc-200"
+                  onClick={() => setShowOrders(true)}
+                  type="button"
+                >
+                  <Bell aria-hidden="true" size={17} />
+                  {pendingConsignmentOrders.length} pending
+                </button>
+              </section>
+
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <MetricCard icon={Package} label="Stocks" value={currentStocks} />
+                <MetricCard icon={Package} label="Pieces" tone="emerald" value={currentPieces} />
+                <MetricCard icon={Factory} label="Made" value={productionToday} />
+                <MetricCard icon={Send} label="Released" value={releasedToday} />
               </div>
 
-              <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
-                <div className="flex items-center gap-2 text-zinc-300">
-                  <CalendarDays aria-hidden="true" size={18} />
-                  <p className="text-sm font-medium">{productionDate}</p>
-                </div>
-                <div className="mt-5 grid gap-3">
-                  <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 text-center">
+              <div className="grid gap-3 lg:grid-cols-3">
+                <Panel icon={Factory} title="Today">
+                  <div className="grid grid-cols-2 gap-2">
                     <SmallMetric label="Made pcs" tone="emerald" value={productionPiecesToday} />
                     <SmallMetric label="Out pcs" value={releasedPiecesToday} />
                   </div>
-                </div>
+                </Panel>
+                <Panel icon={UserRound} title="Consignment">
+                  <div className="grid grid-cols-2 gap-2">
+                    <SmallMetric label="Stocks" tone="emerald" value={consignmentStocksTotal} />
+                    <SmallMetric label="Sales" value={consignmentSalesToday} />
+                  </div>
+                </Panel>
+                <Panel icon={ReceiptText} title="Sales">
+                  <div className="grid grid-cols-2 gap-2">
+                    <SmallMetric label="Daily" tone="emerald" value={`PHP ${dailySales}`} />
+                    <SmallMetric label="Month" value={`PHP ${monthlySales}`} />
+                  </div>
+                </Panel>
               </div>
             </div>
           )}
@@ -943,6 +936,12 @@ export default function Home() {
 
           {activeTab === "release" && (
             <div className="grid gap-3">
+              <section className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+                <h2 className="text-xl font-semibold text-white">Release & Sales</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Record outgoing stocks first, then review sales totals below.
+                </p>
+              </section>
               <div className="grid gap-3 lg:grid-cols-[1fr_0.8fr]">
                 <Panel icon={Send} title="Release Stocks">
                   <form className="grid gap-4" onSubmit={releaseStocks}>
@@ -1258,9 +1257,9 @@ function BottomNav({
   setActiveTab: (tab: Tab) => void;
 }) {
   const items = [
-    { icon: HomeIcon, id: "dashboard" as Tab, label: "Home" },
-    { icon: Plus, id: "production" as Tab, label: "Make" },
-    { icon: Send, id: "release" as Tab, label: "Release" },
+    { icon: HomeIcon, id: "dashboard" as Tab, label: "Dashboard" },
+    { icon: Plus, id: "production" as Tab, label: "Produce" },
+    { icon: Send, id: "release" as Tab, label: "Sales" },
     { icon: UserRound, id: "consignment" as Tab, label: "Consign" },
     { icon: History, id: "history" as Tab, label: "History" },
   ];
@@ -1275,7 +1274,7 @@ function BottomNav({
           return (
             <button
               aria-label={item.label}
-              className={`grid h-14 place-items-center rounded-[8px] text-[11px] font-medium transition-colors sm:text-xs ${
+              className={`grid h-14 min-w-0 place-items-center rounded-[8px] px-1 text-[10px] font-medium transition-colors sm:text-xs ${
                 selected
                   ? "bg-emerald-300 text-zinc-950"
                   : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
@@ -1285,7 +1284,7 @@ function BottomNav({
               type="button"
             >
               <Icon aria-hidden="true" size={20} />
-              <span className="mt-1">{item.label}</span>
+              <span className="mt-1 max-w-full truncate">{item.label}</span>
             </button>
           );
         })}
