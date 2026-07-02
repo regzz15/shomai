@@ -46,6 +46,13 @@ type ConsignmentOrder = {
   createdAt: string;
 };
 
+type ConsignmentAccount = {
+  customerName: string;
+  currentStocks: number;
+  soldStocks: number;
+  updatedAt: string;
+};
+
 type StockRelease = {
   id: string;
   orderType: OrderType;
@@ -140,6 +147,7 @@ export default function Home() {
   const [entryDate, setEntryDate] = useState(todayKey);
   const [history, setHistory] = useState<ProductionRecord[]>([]);
   const [consignmentOrders, setConsignmentOrders] = useState<ConsignmentOrder[]>([]);
+  const [consignmentAccounts, setConsignmentAccounts] = useState<ConsignmentAccount[]>([]);
   const [showOrders, setShowOrders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Loading database");
@@ -179,6 +187,14 @@ export default function Home() {
   const pendingConsignmentOrders = consignmentOrders.filter(
     (order) => order.status === "pending",
   );
+  const consignmentStocksTotal = consignmentAccounts.reduce(
+    (total, account) => total + account.currentStocks,
+    0,
+  );
+  const consignmentSoldTotal = consignmentAccounts.reduce(
+    (total, account) => total + account.soldStocks,
+    0,
+  );
 
   function updateOrderType(nextOrderType: OrderType) {
     setOrderType(nextOrderType);
@@ -201,6 +217,7 @@ export default function Home() {
     loadRecords();
     loadConfig();
     loadConsignmentOrders();
+    loadConsignmentAccounts();
     // loadRecords is intentionally scoped to the current todayKey.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayKey]);
@@ -216,6 +233,20 @@ export default function Home() {
       setConsignmentOrders(data.orders ?? []);
     } catch {
       setConsignmentOrders([]);
+    }
+  }
+
+  async function loadConsignmentAccounts() {
+    try {
+      const response = await fetch("/api/consignment-accounts");
+      if (!response.ok) {
+        return;
+      }
+
+      const data = (await response.json()) as { accounts: ConsignmentAccount[] };
+      setConsignmentAccounts(data.accounts ?? []);
+    } catch {
+      setConsignmentAccounts([]);
     }
   }
 
@@ -492,7 +523,10 @@ export default function Home() {
                 <h2 className="font-semibold text-white">Consignment Requests</h2>
                 <button
                   className="text-sm text-emerald-300"
-                  onClick={loadConsignmentOrders}
+                  onClick={() => {
+                    void loadConsignmentOrders();
+                    void loadConsignmentAccounts();
+                  }}
                   type="button"
                 >
                   Refresh
@@ -536,6 +570,35 @@ export default function Home() {
                   </article>
                 ))}
               </div>
+              <div className="mt-4 border-t border-zinc-800 pt-4">
+                <h3 className="mb-2 text-sm font-semibold text-zinc-300">
+                  Consignment Stocks
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <SmallMetric label="Total stocks" value={consignmentStocksTotal} />
+                  <SmallMetric label="Total sold" value={consignmentSoldTotal} />
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {consignmentAccounts.slice(0, 6).map((account) => (
+                    <div
+                      className="flex items-center justify-between gap-3 rounded-[8px] bg-zinc-900 px-3 py-2 text-sm"
+                      key={account.customerName}
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-white">
+                          {account.customerName}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          sold {account.soldStocks}
+                        </p>
+                      </div>
+                      <p className="font-semibold text-emerald-300">
+                        {account.currentStocks}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </section>
           )}
           <div className="mb-3 flex items-center justify-between gap-3 rounded-[8px] border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300 sm:text-sm">
@@ -558,6 +621,12 @@ export default function Home() {
                   value={productionToday}
                 />
                 <MetricCard icon={UserRound} label="Released Today" value={releasedToday} />
+                <MetricCard
+                  icon={Package}
+                  label="Consignment Stocks"
+                  tone="emerald"
+                  value={consignmentStocksTotal}
+                />
               </div>
 
               <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">

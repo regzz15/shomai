@@ -65,11 +65,18 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const customerName = searchParams.get("customerName")?.trim();
 
+  await ensureTable();
+
   if (!customerName) {
-    return Response.json({ error: "Missing customer name." }, { status: 400 });
+    const result = await pool.query(`
+      select customer_name, current_stocks, sold_stocks, updated_at
+      from siomai_consignment_accounts
+      order by updated_at desc
+    `);
+
+    return Response.json({ accounts: result.rows.map(toAccount) });
   }
 
-  await ensureTable();
   const result = await pool.query(
     `
       insert into siomai_consignment_accounts (customer_name)
