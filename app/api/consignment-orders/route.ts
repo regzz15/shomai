@@ -228,7 +228,11 @@ export async function PATCH(request: Request) {
   }
 
   const body = (await request.json()) as { id?: string; status?: OrderStatus };
-  if (!body.id || !body.status) {
+  if (
+    !body.id ||
+    !body.status ||
+    !["pending", "accepted", "done"].includes(body.status)
+  ) {
     return Response.json({ error: "Invalid order update." }, { status: 400 });
   }
 

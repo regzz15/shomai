@@ -5,6 +5,7 @@ import {
   Bell,
   CalendarDays,
   Check,
+  ClipboardList,
   Factory,
   History,
   Home as HomeIcon,
@@ -201,6 +202,7 @@ export default function Home() {
   const [openConsignmentMenu, setOpenConsignmentMenu] = useState("");
   const [showAddConsignment, setShowAddConsignment] = useState(false);
   const [showOrders, setShowOrders] = useState(false);
+  const [unreadOrderIds, setUnreadOrderIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState("Notifications off");
   const [syncStatus, setSyncStatus] = useState("Loading database");
@@ -249,9 +251,7 @@ export default function Home() {
     (total, record) => total + getReleasedTotal(record),
     0,
   );
-  const pendingConsignmentOrders = consignmentOrders.filter(
-    (order) => order.status === "pending",
-  );
+  const unreadOrderCount = unreadOrderIds.length;
   const consignmentStocksTotal = consignmentAccounts.reduce(
     (total, account) => total + account.currentStocks,
     0,
@@ -383,11 +383,22 @@ export default function Home() {
     const knownOrderIds = knownOrderIdsRef.current;
     knownOrderIdsRef.current = new Set(orders.map((order) => order.id));
 
-    if (!knownOrderIds || !("Notification" in window) || Notification.permission !== "granted") {
+    if (!knownOrderIds) {
+      setUnreadOrderIds(pendingOrders.map((order) => order.id));
       return;
     }
 
     const newPendingOrders = pendingOrders.filter((order) => !knownOrderIds.has(order.id));
+    if (newPendingOrders.length > 0) {
+      setUnreadOrderIds((current) => [
+        ...new Set([...current, ...newPendingOrders.map((order) => order.id)]),
+      ]);
+    }
+
+    if (!("Notification" in window) || Notification.permission !== "granted") {
+      return;
+    }
+
     const newestOrder = newPendingOrders[0];
     if (!newestOrder) {
       return;
@@ -455,6 +466,7 @@ export default function Home() {
     });
 
     if (response.ok) {
+      setUnreadOrderIds((current) => current.filter((orderId) => orderId !== id));
       await loadConsignmentOrders();
     }
   }
@@ -764,13 +776,16 @@ export default function Home() {
               </div>
               <button
                 className="relative grid h-10 w-10 place-items-center rounded-[8px] border border-zinc-800 bg-zinc-950 text-zinc-300"
-                onClick={() => setShowOrders((current) => !current)}
+                onClick={() => {
+                  setShowOrders((current) => !current);
+                  setUnreadOrderIds([]);
+                }}
                 type="button"
               >
                 <Bell aria-hidden="true" size={18} />
-                {pendingConsignmentOrders.length > 0 && (
+                {unreadOrderCount > 0 && (
                   <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
-                    {pendingConsignmentOrders.length}
+                    {unreadOrderCount}
                   </span>
                 )}
               </button>
@@ -789,7 +804,7 @@ export default function Home() {
                 onClick={(event) => event.stopPropagation()}
               >
                 <div className="mb-3 flex items-center justify-between">
-                  <h2 className="font-semibold text-white">Pending Requests</h2>
+                  <h2 className="font-semibold text-white">Notifications</h2>
                   <div className="flex items-center gap-2">
                     <button
                       className="rounded-[8px] border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200"
@@ -803,6 +818,7 @@ export default function Home() {
                       onClick={() => {
                         setActiveTab("orders");
                         setShowOrders(false);
+                        setUnreadOrderIds([]);
                       }}
                       type="button"
                     >
@@ -834,14 +850,6 @@ export default function Home() {
                     Production Overview
                   </h2>
                 </div>
-                <button
-                  className="flex h-11 items-center justify-center gap-2 rounded-[8px] border border-zinc-700 px-4 text-sm font-semibold text-zinc-200"
-                  onClick={() => setShowOrders(true)}
-                  type="button"
-                >
-                  <Bell aria-hidden="true" size={17} />
-                  {pendingConsignmentOrders.length} pending
-                </button>
               </section>
 
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -1388,7 +1396,15 @@ export default function Home() {
           )}
         </section>
       </main>
-      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
+      <BottomNav
+        activeTab={activeTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          if (tab === "orders") {
+            setUnreadOrderIds([]);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -1402,7 +1418,7 @@ function BottomNav({
 }) {
   const items = [
     { icon: HomeIcon, id: "dashboard" as Tab, label: "Dashboard" },
-    { icon: Bell, id: "orders" as Tab, label: "Orders" },
+    { icon: ClipboardList, id: "orders" as Tab, label: "Orders" },
     { icon: Plus, id: "production" as Tab, label: "Produce" },
     { icon: Send, id: "release" as Tab, label: "Sales" },
     { icon: UserRound, id: "consignment" as Tab, label: "Consign" },
@@ -1450,6 +1466,12 @@ function OrderList({
     status: ConsignmentOrder["status"],
   ) => Promise<void>;
 }) {
+  const statusLabel: Record<ConsignmentOrder["status"], string> = {
+    accepted: "Undone",
+    done: "Done",
+    pending: "Undone",
+  };
+
   return (
     <div className="grid gap-2">
       {orders.length === 0 && (
@@ -1474,20 +1496,39 @@ function OrderList({
                 <p className="mt-1 text-sm text-zinc-300">{order.notes}</p>
               )}
             </div>
-            <span className="rounded-[8px] border border-zinc-700 px-2 py-1 text-xs text-zinc-300">
-              {order.status}
+            <span
+              className={`rounded-[8px] border px-2 py-1 text-xs font-semibold ${
+                order.status === "done"
+                  ? "border-emerald-800 bg-emerald-950/70 text-emerald-200"
+                  : order.status === "accepted"
+                    ? "border-amber-800 bg-amber-950/70 text-amber-200"
+                    : "border-zinc-700 text-zinc-300"
+              }`}
+            >
+              {statusLabel[order.status]}
             </span>
           </div>
-          {order.status === "pending" && (
-            <button
-              className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
-              onClick={() => void updateConsignmentOrder(order.id, "accepted")}
-              type="button"
-            >
-              <Check aria-hidden="true" size={16} />
-              Accept
-            </button>
-          )}
+          <div className="mt-3 grid gap-2">
+            {order.status !== "done" && (
+              <button
+                className="flex h-10 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+                onClick={() => void updateConsignmentOrder(order.id, "done")}
+                type="button"
+              >
+                <Check aria-hidden="true" size={16} />
+                Done
+              </button>
+            )}
+            {order.status === "done" && (
+              <button
+                className="flex h-10 items-center justify-center rounded-[8px] border border-amber-800 font-semibold text-amber-200"
+                onClick={() => void updateConsignmentOrder(order.id, "accepted")}
+                type="button"
+              >
+                Undone
+              </button>
+            )}
+          </div>
         </article>
       ))}
     </div>
