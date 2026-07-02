@@ -1,12 +1,20 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { ClipboardList, LogOut, Package, Send, ShieldCheck } from "lucide-react";
+import { ClipboardList, LogOut, Package, Pencil, Save, Send, ShieldCheck } from "lucide-react";
 
 type ConsignmentAccount = {
+  address: string;
+  contactNumber: string;
   customerName: string;
   currentStocks: number;
+  salesByDate: ConsignmentSale[];
   soldStocks: number;
+};
+
+type ConsignmentSale = {
+  date: string;
+  quantity: number;
 };
 
 type Tab = "orders" | "stocks";
@@ -20,9 +28,21 @@ function getTodayKey() {
   }).format(new Date());
 }
 
+function normalizeAccount(account: ConsignmentAccount): ConsignmentAccount {
+  return {
+    ...account,
+    address: account.address ?? "",
+    contactNumber: account.contactNumber ?? "",
+    salesByDate: Array.isArray(account.salesByDate) ? account.salesByDate : [],
+    soldStocks: Number(account.soldStocks) || 0,
+  };
+}
+
 export default function ConsignmentPage() {
   const [activeTab, setActiveTab] = useState<Tab>("orders");
   const [customerName, setCustomerName] = useState("");
+  const [contactNumber, setContactNumber] = useState("");
+  const [address, setAddress] = useState("");
   const [pinCode, setPinCode] = useState("");
   const [packs, setPacks] = useState("");
   const [requestDate, setRequestDate] = useState(getTodayKey());
@@ -31,7 +51,9 @@ export default function ConsignmentPage() {
   const [account, setAccount] = useState<ConsignmentAccount | null>(null);
   const [receiveQty, setReceiveQty] = useState("");
   const [sellQty, setSellQty] = useState("");
+  const [saleDate, setSaleDate] = useState(getTodayKey());
   const [accountStatus, setAccountStatus] = useState("");
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const needsNameSetup = Boolean(account?.customerName.startsWith("Pending "));
 
@@ -52,7 +74,11 @@ export default function ConsignmentPage() {
     }
 
     const data = (await response.json()) as { account: ConsignmentAccount };
-    setAccount(data.account);
+    const nextAccount = normalizeAccount(data.account);
+    setAccount(nextAccount);
+    setCustomerName(nextAccount.customerName.startsWith("Pending ") ? "" : nextAccount.customerName);
+    setContactNumber(nextAccount.contactNumber);
+    setAddress(nextAccount.address);
     setAccountStatus("");
     setStatus("");
   }
@@ -68,6 +94,8 @@ export default function ConsignmentPage() {
     const response = await fetch("/api/consignment-accounts", {
       body: JSON.stringify({
         action: "claim",
+        address: address.trim(),
+        contactNumber: contactNumber.trim(),
         customerName: trimmedName,
         pinCode,
       }),
@@ -81,8 +109,39 @@ export default function ConsignmentPage() {
     }
 
     const data = (await response.json()) as { account: ConsignmentAccount };
-    setAccount(data.account);
+    setAccount(normalizeAccount(data.account));
     setAccountStatus("");
+  }
+
+  async function saveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedName = account?.customerName ?? "";
+    if (!trimmedName || !/^\d{4}$/.test(pinCode)) {
+      setAccountStatus("Login again to edit profile.");
+      return;
+    }
+
+    const response = await fetch("/api/consignment-accounts", {
+      body: JSON.stringify({
+        action: "profile",
+        address: address.trim(),
+        contactNumber: contactNumber.trim(),
+        customerName: trimmedName,
+        pinCode,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      setAccountStatus("Unable to save profile.");
+      return;
+    }
+
+    const data = (await response.json()) as { account: ConsignmentAccount };
+    setAccount(normalizeAccount(data.account));
+    setIsEditingProfile(false);
+    setAccountStatus("Account profile saved.");
   }
 
   async function updateAccount(action: "receive" | "sell", quantityText: string) {
@@ -99,6 +158,7 @@ export default function ConsignmentPage() {
         customerName: trimmedName,
         pinCode,
         quantity,
+        saleDate,
       }),
       headers: { "Content-Type": "application/json" },
       method: "POST",
@@ -110,10 +170,11 @@ export default function ConsignmentPage() {
     }
 
     const data = (await response.json()) as { account: ConsignmentAccount };
-    setAccount(data.account);
+    setAccount(normalizeAccount(data.account));
     setReceiveQty("");
     setSellQty("");
-    setAccountStatus(action === "receive" ? "Stocks received." : "Sale recorded.");
+    setSaleDate(getTodayKey());
+    setAccountStatus(action === "receive" ? "Stocks received." : "Sales saved.");
   }
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {
@@ -150,6 +211,9 @@ export default function ConsignmentPage() {
     setNotes("");
     setStatus("");
     setAccountStatus("");
+    setContactNumber("");
+    setAddress("");
+    setIsEditingProfile(false);
   }
 
   if (!account) {
@@ -225,6 +289,23 @@ export default function ConsignmentPage() {
                 value={customerName}
               />
             </label>
+            <label className="grid gap-2">
+              <span className="text-sm text-zinc-300">Contact number</span>
+              <input
+                className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                inputMode="tel"
+                onChange={(event) => setContactNumber(event.target.value)}
+                value={contactNumber}
+              />
+            </label>
+            <label className="grid gap-2">
+              <span className="text-sm text-zinc-300">Address</span>
+              <textarea
+                className="min-h-24 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-emerald-300"
+                onChange={(event) => setAddress(event.target.value)}
+                value={address}
+              />
+            </label>
             <button
               className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
               type="submit"
@@ -257,9 +338,58 @@ export default function ConsignmentPage() {
               <LogOut aria-hidden="true" size={18} />
             </button>
           </div>
+          <div className="mt-3 grid gap-1 rounded-[8px] border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-300">
+            <p>{currentAccount.contactNumber || "No contact number"}</p>
+            <p className="text-zinc-500">{currentAccount.address || "No address"}</p>
+            <button
+              className="mt-2 flex h-10 items-center justify-center gap-2 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
+              onClick={() => {
+                setContactNumber(currentAccount.contactNumber ?? "");
+                setAddress(currentAccount.address ?? "");
+                setIsEditingProfile((current) => !current);
+              }}
+              type="button"
+            >
+              <Pencil aria-hidden="true" size={16} />
+              Edit Account
+            </button>
+          </div>
         </header>
 
-        <section className="mt-3 min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20">
+        <section className="mt-3 grid min-h-0 gap-3">
+          {isEditingProfile && (
+            <form
+              className="grid gap-4 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20"
+              onSubmit={saveProfile}
+            >
+              <h2 className="text-lg font-semibold">Account Details</h2>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Contact number</span>
+                <input
+                  className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                  inputMode="tel"
+                  onChange={(event) => setContactNumber(event.target.value)}
+                  value={contactNumber}
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Address</span>
+                <textarea
+                  className="min-h-24 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-emerald-300"
+                  onChange={(event) => setAddress(event.target.value)}
+                  value={address}
+                />
+              </label>
+              <button
+                className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+                type="submit"
+              >
+                <Save aria-hidden="true" size={18} />
+                Save Details
+              </button>
+            </form>
+          )}
+          <div className="min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20">
           {activeTab === "orders" && (
             <form className="grid gap-4" onSubmit={submitOrder}>
               <div>
@@ -313,7 +443,7 @@ export default function ConsignmentPage() {
               <div>
                 <h2 className="text-lg font-semibold">My Stocks</h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  Track received packs and sold packs.
+                  Track current packs and sales by date.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -324,7 +454,7 @@ export default function ConsignmentPage() {
                   </p>
                 </div>
                 <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
-                  <p className="text-sm text-zinc-400">Sold</p>
+                  <p className="text-sm text-zinc-400">Sales</p>
                   <p className="mt-1 text-3xl font-semibold text-emerald-300">
                     {currentAccount.soldStocks}
                   </p>
@@ -348,7 +478,7 @@ export default function ConsignmentPage() {
                 Add Stocks
               </button>
               <label className="grid gap-2">
-                <span className="text-sm text-zinc-300">Record sold packs</span>
+                <span className="text-sm text-zinc-300">Sales quantity</span>
                 <input
                   className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
                   min="1"
@@ -357,16 +487,44 @@ export default function ConsignmentPage() {
                   value={sellQty}
                 />
               </label>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Sales date</span>
+                <input
+                  className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                  onChange={(event) => setSaleDate(event.target.value)}
+                  required
+                  type="date"
+                  value={saleDate}
+                />
+              </label>
               <button
                 className="h-12 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
                 onClick={() => updateAccount("sell", sellQty)}
                 type="button"
               >
-                Record Sale
+                Save Sales
               </button>
+              <div className="grid gap-2 border-t border-zinc-800 pt-3">
+                <h3 className="font-semibold text-white">Sales by Date</h3>
+                {currentAccount.salesByDate.length === 0 && (
+                  <p className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-400">
+                    No sales recorded yet.
+                  </p>
+                )}
+                {currentAccount.salesByDate.map((sale) => (
+                  <div
+                    className="flex items-center justify-between rounded-[8px] border border-zinc-800 bg-zinc-950 px-3 py-2"
+                    key={sale.date}
+                  >
+                    <span className="text-sm text-zinc-300">{sale.date}</span>
+                    <span className="font-semibold text-emerald-300">{sale.quantity}</span>
+                  </div>
+                ))}
+              </div>
               {accountStatus && <p className="text-sm text-zinc-300">{accountStatus}</p>}
             </div>
           )}
+          </div>
         </section>
       </section>
 

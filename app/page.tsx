@@ -27,7 +27,7 @@ const stockStorageKey = "shomai-current-stocks";
 const productionStorageKey = "shomai-production-today";
 const historyStorageKey = "shomai-production-history";
 
-type Tab = "dashboard" | "production" | "release" | "consignment" | "reports" | "history";
+type Tab = "dashboard" | "production" | "release" | "consignment" | "history";
 
 type ProductionRecord = {
   date: string;
@@ -48,11 +48,19 @@ type ConsignmentOrder = {
 };
 
 type ConsignmentAccount = {
+  address: string;
+  contactNumber: string;
   customerName: string;
   currentStocks: number;
   pinCode?: string;
+  salesByDate: ConsignmentSale[];
   soldStocks: number;
   updatedAt: string;
+};
+
+type ConsignmentSale = {
+  date: string;
+  quantity: number;
 };
 
 type StockRelease = {
@@ -120,6 +128,20 @@ function getReleaseSales(release: StockRelease) {
 
 function getRecordSales(record?: ProductionRecord) {
   return record?.releases.reduce((total, release) => total + getReleaseSales(release), 0) ?? 0;
+}
+
+function getConsignmentSalesForDate(account: ConsignmentAccount, date: string) {
+  return account.salesByDate?.find((sale) => sale.date === date)?.quantity ?? 0;
+}
+
+function normalizeConsignmentAccount(account: ConsignmentAccount): ConsignmentAccount {
+  return {
+    ...account,
+    address: account.address ?? "",
+    contactNumber: account.contactNumber ?? "",
+    salesByDate: Array.isArray(account.salesByDate) ? account.salesByDate : [],
+    soldStocks: Number(account.soldStocks) || 0,
+  };
 }
 
 function normalizeRecord(record: ProductionRecord): ProductionRecord {
@@ -203,8 +225,8 @@ export default function Home() {
     (total, account) => total + account.currentStocks,
     0,
   );
-  const consignmentSoldTotal = consignmentAccounts.reduce(
-    (total, account) => total + account.soldStocks,
+  const consignmentSalesToday = consignmentAccounts.reduce(
+    (total, account) => total + getConsignmentSalesForDate(account, todayKey),
     0,
   );
   const consignmentStockRows = useMemo(
@@ -264,7 +286,7 @@ export default function Home() {
       }
 
       const data = (await response.json()) as { accounts: ConsignmentAccount[] };
-      setConsignmentAccounts(data.accounts ?? []);
+      setConsignmentAccounts((data.accounts ?? []).map(normalizeConsignmentAccount));
     } catch {
       setConsignmentAccounts([]);
     }
@@ -626,7 +648,7 @@ export default function Home() {
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                   <SmallMetric label="Total stocks" value={consignmentStocksTotal} />
-                  <SmallMetric label="Total sold" value={consignmentSoldTotal} />
+                  <SmallMetric label="Sales today" value={consignmentSalesToday} />
                 </div>
                 <div className="mt-3 grid gap-2">
                   {consignmentAccounts.slice(0, 6).map((account) => (
@@ -639,7 +661,7 @@ export default function Home() {
                           {account.customerName}
                         </p>
                         <p className="text-xs text-zinc-500">
-                          sold {account.soldStocks}
+                          sales today {getConsignmentSalesForDate(account, todayKey)}
                           {account.pinCode ? ` - PIN ${account.pinCode}` : ""}
                         </p>
                       </div>
@@ -783,182 +805,86 @@ export default function Home() {
           )}
 
           {activeTab === "release" && (
-            <div className="grid gap-3 lg:grid-cols-[1fr_0.8fr]">
-              <Panel icon={Send} title="Release Stocks">
-                <form className="grid gap-4" onSubmit={releaseStocks}>
-                  <DateField
-                    label="Entry Date"
-                    onChange={setEntryDate}
-                    todayKey={todayKey}
-                    value={entryDate}
-                  />
-                  <TextField
-                    label="Taken By"
-                    onChange={setReleaseName}
-                    placeholder="Name"
-                    value={releaseName}
-                  />
-                  <NumberField
-                    label="Quantity"
-                    onChange={setReleaseInput}
-                    placeholder="Enter quantity"
-                    value={releaseInput}
-                  />
-                  <label className="grid gap-2">
-                    <span className="text-sm font-medium text-zinc-300">
-                      Order Type
-                    </span>
-                    <select
-                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
-                      onChange={(event) =>
-                        updateOrderType(event.target.value as OrderType)
-                      }
-                      value={orderType}
-                    >
-                      <option value="regular">Regular Order</option>
-                      <option value="consignment">Consignment</option>
-                    </select>
-                  </label>
-                  <label className="grid gap-2">
-                    <span className="text-sm font-medium text-zinc-300">
-                      Payment Status
-                    </span>
-                    <select
-                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={orderType === "consignment"}
-                      onChange={(event) =>
-                        setPaymentStatus(event.target.value as PaymentStatus)
-                      }
-                      value={orderType === "consignment" ? "not_paid" : paymentStatus}
-                    >
-                      <option value="not_paid">Not Paid</option>
-                      <option value="partial">Partial</option>
-                      <option value="paid">Paid</option>
-                    </select>
-                  </label>
-                  <button
-                    aria-label="Release stocks"
-                    className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 font-semibold text-zinc-950 transition-colors hover:bg-emerald-200"
-                    title="Release stocks"
-                    type="submit"
-                  >
-                    <Minus aria-hidden="true" size={18} />
-                    Release
-                  </button>
-                </form>
-              </Panel>
-
-              <Panel icon={Package} title="Stock Summary">
-                <div className="grid gap-3">
-                  <SmallMetric label="Available stocks" value={currentStocks} />
-                  <SmallMetric
-                    label="Available pcs"
-                    tone="emerald"
-                    value={currentPieces}
-                  />
-                  <SmallMetric label="Released today" value={releasedToday} />
-                  <SmallMetric label="Released pcs" value={releasedPiecesToday} />
-                </div>
-              </Panel>
-            </div>
-          )}
-
-          {activeTab === "consignment" && (
-            <div className="grid gap-3 lg:grid-cols-[0.8fr_1.2fr]">
-              <Panel icon={KeyRound} title="Generate PIN">
-                <div className="grid gap-4">
-                  <div className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-4">
-                    <p className="text-sm text-zinc-400">New consignee PIN</p>
-                    <p className="mt-2 text-4xl font-semibold tracking-[0.25em] text-emerald-300">
-                      {newConsignmentPin || "----"}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      className="h-12 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
-                      onClick={generatePin}
-                      type="button"
-                    >
-                      Generate
-                    </button>
-                    <button
-                      className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
-                      onClick={() => void saveConsignmentPin()}
-                      type="button"
-                    >
-                      Save PIN
-                    </button>
-                  </div>
-                  {consignmentPinStatus && (
-                    <p className="text-sm text-zinc-300">{consignmentPinStatus}</p>
-                  )}
-                </div>
-              </Panel>
-
-              <Panel icon={UserRound} title="Consignment Stocks">
-                <div className="grid gap-3">
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <SmallMetric label="Accounts" value={consignmentAccounts.length} />
-                    <SmallMetric
-                      label="Stocks"
-                      tone="emerald"
-                      value={consignmentStocksTotal}
-                    />
-                    <SmallMetric label="Pieces" value={consignmentStocksTotal * piecesPerStock} />
-                    <SmallMetric label="Sold" value={consignmentSoldTotal} />
-                  </div>
-                  <button
-                    className="h-11 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
-                    onClick={() => void loadConsignmentAccounts()}
-                    type="button"
-                  >
-                    Refresh
-                  </button>
-                  <div className="grid gap-2">
-                    {consignmentStockRows.length === 0 && (
-                      <p className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-400">
-                        No consignment accounts yet.
-                      </p>
-                    )}
-                    {consignmentStockRows.map((account) => (
-                      <article
-                        className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3"
-                        key={account.pinCode || account.customerName}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <h3 className="truncate font-semibold text-white">
-                              {account.customerName.startsWith("Pending ")
-                                ? "Waiting for account name"
-                                : account.customerName}
-                            </h3>
-                            <p className="mt-1 text-xs text-zinc-500">
-                              PIN {account.pinCode || "----"} - {formatDateTime(account.updatedAt)}
-                            </p>
-                          </div>
-                          <span className="rounded-[8px] bg-emerald-300 px-3 py-1 text-sm font-semibold text-zinc-950">
-                            {account.currentStocks}
-                          </span>
-                        </div>
-                        <div className="mt-3 grid grid-cols-3 gap-2">
-                          <SmallMetric label="Stocks" value={account.currentStocks} />
-                          <SmallMetric
-                            label="Pieces"
-                            tone="emerald"
-                            value={account.currentStocks * piecesPerStock}
-                          />
-                          <SmallMetric label="Sold" value={account.soldStocks} />
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </div>
-              </Panel>
-            </div>
-          )}
-
-          {activeTab === "reports" && (
             <div className="grid gap-3">
+              <div className="grid gap-3 lg:grid-cols-[1fr_0.8fr]">
+                <Panel icon={Send} title="Release Stocks">
+                  <form className="grid gap-4" onSubmit={releaseStocks}>
+                    <DateField
+                      label="Entry Date"
+                      onChange={setEntryDate}
+                      todayKey={todayKey}
+                      value={entryDate}
+                    />
+                    <TextField
+                      label="Taken By"
+                      onChange={setReleaseName}
+                      placeholder="Name"
+                      value={releaseName}
+                    />
+                    <NumberField
+                      label="Quantity"
+                      onChange={setReleaseInput}
+                      placeholder="Enter quantity"
+                      value={releaseInput}
+                    />
+                    <label className="grid gap-2">
+                      <span className="text-sm font-medium text-zinc-300">
+                        Order Type
+                      </span>
+                      <select
+                        className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+                        onChange={(event) =>
+                          updateOrderType(event.target.value as OrderType)
+                        }
+                        value={orderType}
+                      >
+                        <option value="regular">Regular Order</option>
+                        <option value="consignment">Consignment</option>
+                      </select>
+                    </label>
+                    <label className="grid gap-2">
+                      <span className="text-sm font-medium text-zinc-300">
+                        Payment Status
+                      </span>
+                      <select
+                        className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={orderType === "consignment"}
+                        onChange={(event) =>
+                          setPaymentStatus(event.target.value as PaymentStatus)
+                        }
+                        value={orderType === "consignment" ? "not_paid" : paymentStatus}
+                      >
+                        <option value="not_paid">Not Paid</option>
+                        <option value="partial">Partial</option>
+                        <option value="paid">Paid</option>
+                      </select>
+                    </label>
+                    <button
+                      aria-label="Release stocks"
+                      className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 font-semibold text-zinc-950 transition-colors hover:bg-emerald-200"
+                      title="Release stocks"
+                      type="submit"
+                    >
+                      <Minus aria-hidden="true" size={18} />
+                      Release
+                    </button>
+                  </form>
+                </Panel>
+
+                <Panel icon={Package} title="Stock Summary">
+                  <div className="grid gap-3">
+                    <SmallMetric label="Available stocks" value={currentStocks} />
+                    <SmallMetric
+                      label="Available pcs"
+                      tone="emerald"
+                      value={currentPieces}
+                    />
+                    <SmallMetric label="Released today" value={releasedToday} />
+                    <SmallMetric label="Released pcs" value={releasedPiecesToday} />
+                  </div>
+                </Panel>
+              </div>
+
               <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
                 <Panel icon={ReceiptText} title="Sales Reports">
                   <div className="grid gap-4">
@@ -1015,20 +941,60 @@ export default function Home() {
                   </div>
                 </Panel>
               </div>
+            </div>
+          )}
 
-              <Panel icon={UserRound} title="Consignment Stock Monitoring">
+          {activeTab === "consignment" && (
+            <div className="grid gap-3 lg:grid-cols-[0.8fr_1.2fr]">
+              <Panel icon={KeyRound} title="Generate PIN">
+                <div className="grid gap-4">
+                  <div className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-4">
+                    <p className="text-sm text-zinc-400">New consignee PIN</p>
+                    <p className="mt-2 text-4xl font-semibold tracking-[0.25em] text-emerald-300">
+                      {newConsignmentPin || "----"}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      className="h-12 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
+                      onClick={generatePin}
+                      type="button"
+                    >
+                      Generate
+                    </button>
+                    <button
+                      className="h-12 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+                      onClick={() => void saveConsignmentPin()}
+                      type="button"
+                    >
+                      Save PIN
+                    </button>
+                  </div>
+                  {consignmentPinStatus && (
+                    <p className="text-sm text-zinc-300">{consignmentPinStatus}</p>
+                  )}
+                </div>
+              </Panel>
+
+              <Panel icon={UserRound} title="Consignment Stocks">
                 <div className="grid gap-3">
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <SmallMetric label="Accounts" value={consignmentAccounts.length} />
                     <SmallMetric
-                      label="Total stocks"
+                      label="Stocks"
                       tone="emerald"
                       value={consignmentStocksTotal}
                     />
-                    <SmallMetric label="Total pcs" value={consignmentStocksTotal * piecesPerStock} />
-                    <SmallMetric label="Total sold" value={consignmentSoldTotal} />
+                    <SmallMetric label="Pieces" value={consignmentStocksTotal * piecesPerStock} />
+                    <SmallMetric label="Sales today" value={consignmentSalesToday} />
                   </div>
-
+                  <button
+                    className="h-11 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
+                    onClick={() => void loadConsignmentAccounts()}
+                    type="button"
+                  >
+                    Refresh
+                  </button>
                   <div className="grid gap-2">
                     {consignmentStockRows.length === 0 && (
                       <p className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 text-sm text-zinc-400">
@@ -1038,30 +1004,50 @@ export default function Home() {
                     {consignmentStockRows.map((account) => (
                       <article
                         className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3"
-                        key={account.customerName}
+                        key={account.pinCode || account.customerName}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <h3 className="truncate font-semibold text-white">
-                              {account.customerName}
+                              {account.customerName.startsWith("Pending ")
+                                ? "Waiting for account name"
+                                : account.customerName}
                             </h3>
                             <p className="mt-1 text-xs text-zinc-500">
                               PIN {account.pinCode || "----"} - {formatDateTime(account.updatedAt)}
                             </p>
+                            {(account.contactNumber || account.address) && (
+                              <p className="mt-1 text-xs text-zinc-400">
+                                {[account.contactNumber, account.address].filter(Boolean).join(" - ")}
+                              </p>
+                            )}
                           </div>
                           <span className="rounded-[8px] bg-emerald-300 px-3 py-1 text-sm font-semibold text-zinc-950">
                             {account.currentStocks}
                           </span>
                         </div>
-                        <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+                        <div className="mt-3 grid grid-cols-3 gap-2">
                           <SmallMetric label="Stocks" value={account.currentStocks} />
                           <SmallMetric
                             label="Pieces"
                             tone="emerald"
                             value={account.currentStocks * piecesPerStock}
                           />
-                          <SmallMetric label="Sold" value={account.soldStocks} />
+                          <SmallMetric label="Sales today" value={getConsignmentSalesForDate(account, todayKey)} />
                         </div>
+                        {account.salesByDate.length > 0 && (
+                          <div className="mt-3 grid gap-2 border-t border-zinc-800 pt-3">
+                            {account.salesByDate.slice(0, 5).map((sale) => (
+                              <div
+                                className="flex items-center justify-between rounded-[8px] bg-zinc-950 px-3 py-2 text-sm"
+                                key={sale.date}
+                              >
+                                <span className="text-zinc-400">{formatDisplayDate(sale.date)}</span>
+                                <span className="font-semibold text-emerald-300">{sale.quantity}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </article>
                     ))}
                   </div>
@@ -1139,13 +1125,12 @@ function BottomNav({
     { icon: Plus, id: "production" as Tab, label: "Make" },
     { icon: Send, id: "release" as Tab, label: "Release" },
     { icon: UserRound, id: "consignment" as Tab, label: "Consign" },
-    { icon: ReceiptText, id: "reports" as Tab, label: "Sales" },
     { icon: History, id: "history" as Tab, label: "History" },
   ];
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 shadow-2xl shadow-black/40 backdrop-blur sm:sticky sm:bottom-auto sm:mx-auto sm:mb-4 sm:max-w-3xl sm:rounded-[8px] sm:border">
-      <div className="mx-auto grid max-w-lg grid-cols-6 gap-1">
+      <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
         {items.map((item) => {
           const Icon = item.icon;
           const selected = activeTab === item.id;
