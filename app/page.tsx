@@ -452,10 +452,9 @@ export default function Home() {
                   <p className="text-sm font-medium">{productionDate}</p>
                 </div>
                 <div className="mt-5 grid gap-3">
-                  <div className="grid grid-cols-3 gap-2 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 text-center">
+                  <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 text-center">
                     <SmallMetric label="Made pcs" tone="emerald" value={productionPiecesToday} />
                     <SmallMetric label="Out pcs" value={releasedPiecesToday} />
-                    <SmallMetric label="Per stock" value={piecesPerStock} />
                   </div>
                   <button
                     aria-label="Open production entry"
@@ -678,11 +677,6 @@ export default function Home() {
 
               <Panel icon={BarChart3} title="Sales Summary">
                 <div className="grid gap-3">
-                  <SmallMetric label="Regular price" value={`PHP ${regularPrice}`} />
-                  <SmallMetric
-                    label="Consignment price"
-                    value={`PHP ${consignmentPrice}`}
-                  />
                   <SmallMetric
                     label="Daily sales"
                     tone="emerald"
@@ -979,7 +973,6 @@ function HistoryCard({
         <SmallMetric label="Made pcs" tone="emerald" value={madePieces} />
         <SmallMetric label="Out pcs" value={releasedPieces} />
         <SmallMetric label="Ending pcs" value={endingPieces} />
-        <SmallMetric label="Pcs/stock" value={piecesPerStock} />
       </div>
       {record.releases.length > 0 && (
         <div className="mt-4 grid gap-2 border-t border-zinc-800 pt-3">
