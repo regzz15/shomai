@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { ClipboardList, LogOut, Package, Save, Send, ShieldCheck, UserRound } from "lucide-react";
+import { ClipboardList, LogOut, Package, ReceiptText, Save, Send, ShieldCheck, UserRound } from "lucide-react";
 
 type ConsignmentAccount = {
   address: string;
@@ -17,7 +17,7 @@ type ConsignmentSale = {
   quantity: number;
 };
 
-type Tab = "orders" | "stocks" | "account";
+type Tab = "orders" | "stocks" | "sales" | "account";
 
 function getTodayKey() {
   return new Intl.DateTimeFormat("sv-SE", {
@@ -392,22 +392,14 @@ export default function ConsignmentPage() {
               <div>
                 <h2 className="text-lg font-semibold">My Stocks</h2>
                 <p className="mt-1 text-sm text-zinc-400">
-                  Track current packs and sales by date.
+                  Track current packs and received stocks.
                 </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
-                  <p className="text-sm text-zinc-400">Current</p>
-                  <p className="mt-1 text-3xl font-semibold text-white">
-                    {currentAccount.currentStocks}
-                  </p>
-                </div>
-                <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
-                  <p className="text-sm text-zinc-400">Sales</p>
-                  <p className="mt-1 text-3xl font-semibold text-emerald-300">
-                    {currentAccount.soldStocks}
-                  </p>
-                </div>
+              <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
+                <p className="text-sm text-zinc-400">Current stocks</p>
+                <p className="mt-1 text-3xl font-semibold text-white">
+                  {currentAccount.currentStocks}
+                </p>
               </div>
               <label className="grid gap-2">
                 <span className="text-sm text-zinc-300">Receive stocks</span>
@@ -426,6 +418,24 @@ export default function ConsignmentPage() {
               >
                 Add Stocks
               </button>
+              {accountStatus && <p className="text-sm text-zinc-300">{accountStatus}</p>}
+            </div>
+          )}
+
+          {activeTab === "sales" && (
+            <div className="grid gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Sales</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Record sales separately by date.
+                </p>
+              </div>
+              <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
+                <p className="text-sm text-zinc-400">Total sales</p>
+                <p className="mt-1 text-3xl font-semibold text-emerald-300">
+                  {currentAccount.soldStocks}
+                </p>
+              </div>
               <label className="grid gap-2">
                 <span className="text-sm text-zinc-300">Sales quantity</span>
                 <input
@@ -519,10 +529,11 @@ export default function ConsignmentPage() {
       </section>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-3 pt-2 backdrop-blur">
-        <div className="mx-auto grid max-w-md grid-cols-3 gap-2">
+        <div className="mx-auto grid max-w-md grid-cols-4 gap-2">
           {[
             { icon: ClipboardList, id: "orders" as const, label: "Orders" },
             { icon: Package, id: "stocks" as const, label: "Stocks" },
+            { icon: ReceiptText, id: "sales" as const, label: "Sales" },
             { icon: UserRound, id: "account" as const, label: "Account" },
           ].map((item) => {
             const Icon = item.icon;
