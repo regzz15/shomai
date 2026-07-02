@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Shomai">
+  <rect width="512" height="512" rx="96" fill="#09090b"/>
+  <circle cx="256" cy="256" r="178" fill="#6ee7b7"/>
+  <path fill="#09090b" d="M150 238c0-61 47-108 106-108s106 47 106 108v88c0 31-25 56-56 56H206c-31 0-56-25-56-56v-88Z"/>
+  <path fill="#6ee7b7" d="M196 233c0-35 27-62 60-62s60 27 60 62v78c0 14-11 25-25 25h-70c-14 0-25-11-25-25v-78Z"/>
+  <circle cx="221" cy="239" r="13" fill="#09090b"/>
+  <circle cx="291" cy="239" r="13" fill="#09090b"/>
+  <path fill="none" stroke="#09090b" stroke-linecap="round" stroke-width="18" d="M225 286c19 14 43 14 62 0"/>
+</svg>
