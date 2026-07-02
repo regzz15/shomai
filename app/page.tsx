@@ -362,63 +362,37 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-50">
-      <main className="mx-auto grid min-h-screen w-full max-w-7xl grid-rows-[auto_1fr] gap-6 px-4 py-4 sm:px-6 lg:px-8">
-        <header className="rounded-[8px] border border-zinc-800 bg-zinc-900 px-4 py-4 shadow-xl shadow-black/20">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <main className="mx-auto grid min-h-screen w-full max-w-7xl grid-rows-[auto_1fr] gap-3 px-3 pb-24 pt-3 sm:px-6 sm:pb-6 lg:px-8">
+        <header className="sticky top-0 z-20 rounded-[8px] border border-zinc-800 bg-zinc-900/95 px-4 py-3 shadow-xl shadow-black/20 backdrop-blur">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="grid h-11 w-11 place-items-center rounded-[8px] bg-emerald-300 text-zinc-950">
-                <Factory aria-hidden="true" size={24} />
+              <div className="grid h-10 w-10 place-items-center rounded-[8px] bg-emerald-300 text-zinc-950">
+                <Factory aria-hidden="true" size={22} />
               </div>
               <div>
-                <p className="text-sm font-medium text-emerald-300">
+                <p className="text-xs font-medium text-emerald-300">
                   Production
                 </p>
-                <h1 className="text-2xl font-semibold tracking-normal text-white">
+                <h1 className="text-xl font-semibold tracking-normal text-white">
                   Shomai
                 </h1>
               </div>
             </div>
 
-            <nav className="grid grid-cols-4 gap-2 rounded-[8px] border border-zinc-800 bg-zinc-950 p-1">
-              {[
-                { icon: HomeIcon, id: "dashboard" as Tab, label: "Dashboard" },
-                { icon: Plus, id: "production" as Tab, label: "Production" },
-                { icon: Send, id: "release" as Tab, label: "Release" },
-                { icon: History, id: "history" as Tab, label: "History" },
-              ].map((item) => {
-                const Icon = item.icon;
-                const selected = activeTab === item.id;
-
-                return (
-                  <button
-                    aria-label={item.label}
-                    className={`flex h-11 items-center justify-center gap-2 rounded-[8px] px-3 text-sm font-medium transition-colors ${
-                      selected
-                        ? "bg-emerald-300 text-zinc-950"
-                        : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
-                    }`}
-                    key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    title={item.label}
-                    type="button"
-                  >
-                    <Icon aria-hidden="true" size={18} />
-                    <span className="hidden sm:inline">{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
+            <div className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs font-medium text-zinc-300">
+              {formatDisplayDate(todayKey)}
+            </div>
           </div>
         </header>
 
-        <section className="min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-4 shadow-xl shadow-black/20 sm:p-6">
-          <div className="mb-4 flex items-center justify-between gap-3 rounded-[8px] border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-300">
+        <section className="min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20 sm:p-6">
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-[8px] border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300 sm:text-sm">
             <span>{syncStatus}</span>
             {isSaving && <span className="text-emerald-300">Saving...</span>}
           </div>
           {activeTab === "dashboard" && (
             <div className="grid h-full gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 lg:content-start">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4 lg:content-start">
                 <MetricCard icon={Package} label="Stocks Today" value={currentStocks} />
                 <MetricCard
                   icon={Package}
@@ -434,12 +408,12 @@ export default function Home() {
                 <MetricCard icon={UserRound} label="Released Today" value={releasedToday} />
               </div>
 
-              <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-5">
+              <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
                 <div className="flex items-center gap-2 text-zinc-300">
                   <CalendarDays aria-hidden="true" size={18} />
                   <p className="text-sm font-medium">{productionDate}</p>
                 </div>
-                <div className="mt-8 grid gap-3">
+                <div className="mt-5 grid gap-3">
                   <div className="grid grid-cols-3 gap-2 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 text-center">
                     <SmallMetric label="Made pcs" tone="emerald" value={productionPiecesToday} />
                     <SmallMetric label="Out pcs" value={releasedPiecesToday} />
@@ -481,7 +455,7 @@ export default function Home() {
           )}
 
           {activeTab === "production" && (
-            <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+            <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
               <Panel icon={Plus} title="Add Production">
                 <form className="grid gap-4" onSubmit={addProduction}>
                   <DateField
@@ -549,7 +523,7 @@ export default function Home() {
           )}
 
           {activeTab === "release" && (
-            <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
+            <div className="grid gap-3 lg:grid-cols-[1fr_0.8fr]">
               <Panel icon={Send} title="Release Stocks">
                 <form className="grid gap-4" onSubmit={releaseStocks}>
                   <DateField
@@ -630,7 +604,7 @@ export default function Home() {
           )}
 
           {activeTab === "history" && (
-            <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+            <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
               <Panel icon={CalendarDays} title="Review Date">
                 <label className="grid gap-2">
                   <span className="text-sm font-medium text-zinc-300">Date</span>
@@ -681,7 +655,51 @@ export default function Home() {
           )}
         </section>
       </main>
+      <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
     </div>
+  );
+}
+
+function BottomNav({
+  activeTab,
+  setActiveTab,
+}: {
+  activeTab: Tab;
+  setActiveTab: (tab: Tab) => void;
+}) {
+  const items = [
+    { icon: HomeIcon, id: "dashboard" as Tab, label: "Home" },
+    { icon: Plus, id: "production" as Tab, label: "Make" },
+    { icon: Send, id: "release" as Tab, label: "Release" },
+    { icon: History, id: "history" as Tab, label: "History" },
+  ];
+
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 shadow-2xl shadow-black/40 backdrop-blur sm:sticky sm:bottom-auto sm:mx-auto sm:mb-4 sm:max-w-3xl sm:rounded-[8px] sm:border">
+      <div className="mx-auto grid max-w-lg grid-cols-4 gap-2">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const selected = activeTab === item.id;
+
+          return (
+            <button
+              aria-label={item.label}
+              className={`grid h-14 place-items-center rounded-[8px] text-xs font-medium transition-colors ${
+                selected
+                  ? "bg-emerald-300 text-zinc-950"
+                  : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+              }`}
+              key={item.id}
+              onClick={() => setActiveTab(item.id)}
+              type="button"
+            >
+              <Icon aria-hidden="true" size={20} />
+              <span className="mt-1">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -697,12 +715,12 @@ function MetricCard({
   value: number | string;
 }) {
   return (
-    <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-5">
+    <div className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm text-zinc-400">{label}</p>
         <Icon className={tone === "emerald" ? "text-emerald-300" : "text-zinc-500"} size={18} />
       </div>
-      <p className={`mt-4 text-4xl font-semibold ${tone === "emerald" ? "text-emerald-300" : "text-white"}`}>
+      <p className={`mt-3 text-3xl font-semibold sm:text-4xl ${tone === "emerald" ? "text-emerald-300" : "text-white"}`}>
         {value}
       </p>
     </div>
@@ -719,10 +737,10 @@ function Panel({
   title: string;
 }) {
   return (
-    <section className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-5">
+    <section className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
       <div className="mb-5 flex items-center gap-2 border-b border-zinc-800 pb-4">
         <Icon aria-hidden="true" className="text-emerald-300" size={20} />
-        <h2 className="text-xl font-semibold text-white">{title}</h2>
+        <h2 className="text-lg font-semibold text-white sm:text-xl">{title}</h2>
       </div>
       {children}
     </section>
@@ -823,9 +841,9 @@ function SmallMetric({
   value: number | string;
 }) {
   return (
-    <div className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-4">
+    <div className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 sm:p-4">
       <p className="text-sm text-zinc-400">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold ${tone === "emerald" ? "text-emerald-300" : "text-white"}`}>
+      <p className={`mt-1 text-xl font-semibold sm:text-2xl ${tone === "emerald" ? "text-emerald-300" : "text-white"}`}>
         {value}
       </p>
     </div>
