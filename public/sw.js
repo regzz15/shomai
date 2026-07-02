@@ -10,6 +10,12 @@ self.addEventListener("install", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
@@ -33,20 +39,29 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put("/", responseClone));
+          return response;
+        })
+        .catch(() => caches.match("/") || Response.error()),
+    );
+    return;
+  }
 
-      return fetch(request).then((response) => {
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
         if (response.ok && url.origin === self.location.origin) {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
         }
 
         return response;
-      });
-    }),
+      })
+      .catch(() => caches.match(request)),
   );
 });
