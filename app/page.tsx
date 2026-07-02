@@ -456,36 +456,6 @@ export default function Home() {
                     <SmallMetric label="Made pcs" tone="emerald" value={productionPiecesToday} />
                     <SmallMetric label="Out pcs" value={releasedPiecesToday} />
                   </div>
-                  <button
-                    aria-label="Open production entry"
-                    className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 px-4 font-semibold text-zinc-950 transition-colors hover:bg-emerald-200"
-                    onClick={() => setActiveTab("production")}
-                    title="Open production entry"
-                    type="button"
-                  >
-                    <Plus aria-hidden="true" size={18} />
-                    Add Production
-                  </button>
-                  <button
-                    aria-label="Open history review"
-                    className="flex h-12 items-center justify-center gap-2 rounded-[8px] border border-zinc-700 px-4 font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
-                    onClick={() => setActiveTab("history")}
-                    title="Open history review"
-                    type="button"
-                  >
-                    <BarChart3 aria-hidden="true" size={18} />
-                    Review History
-                  </button>
-                  <button
-                    aria-label="Open release stocks"
-                    className="flex h-12 items-center justify-center gap-2 rounded-[8px] border border-zinc-700 px-4 font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
-                    onClick={() => setActiveTab("release")}
-                    title="Open release stocks"
-                    type="button"
-                  >
-                    <Send aria-hidden="true" size={18} />
-                    Release Stocks
-                  </button>
                 </div>
               </div>
             </div>
