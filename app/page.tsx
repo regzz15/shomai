@@ -109,6 +109,7 @@ export default function Home() {
   const [releaseName, setReleaseName] = useState("");
   const [orderType, setOrderType] = useState<OrderType>("regular");
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("not_paid");
+  const [entryDate, setEntryDate] = useState(todayKey);
   const [history, setHistory] = useState<ProductionRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Loading database");
@@ -129,6 +130,14 @@ export default function Home() {
     if (nextOrderType === "consignment") {
       setPaymentStatus("not_paid");
     }
+  }
+
+  function getStartingStocksForDate(date: string) {
+    const previousRecord = sortHistory(history)
+      .filter((record) => record.date < date)
+      .at(0);
+
+    return previousRecord?.endingStocks ?? initialStocks;
   }
 
   // localStorage hydration needs to update client state after mount.
@@ -194,25 +203,29 @@ export default function Home() {
 
   async function saveState(
     nextHistory: ProductionRecord[],
-    todayRecord: ProductionRecord,
+    savedRecord: ProductionRecord,
   ) {
     const sortedHistory = sortHistory(nextHistory);
+    const todayRecord = sortedHistory.find((record) => record.date === todayKey);
 
     setIsSaving(true);
     setHistory(sortedHistory);
-    setCurrentStocks(todayRecord.endingStocks);
-    setProductionToday(todayRecord.productionAdded);
-    window.localStorage.setItem(stockStorageKey, String(todayRecord.endingStocks));
+    setCurrentStocks(todayRecord?.endingStocks ?? savedRecord.endingStocks);
+    setProductionToday(todayRecord?.productionAdded ?? 0);
+    window.localStorage.setItem(
+      stockStorageKey,
+      String(todayRecord?.endingStocks ?? savedRecord.endingStocks),
+    );
     window.localStorage.setItem(
       productionStorageKey,
-      String(todayRecord.productionAdded),
+      String(todayRecord?.productionAdded ?? 0),
     );
     window.localStorage.setItem(historyStorageKey, JSON.stringify(sortedHistory));
     setSyncStatus("Saving");
 
     try {
       const response = await fetch("/api/records", {
-        body: JSON.stringify(todayRecord),
+        body: JSON.stringify(savedRecord),
         headers: { "Content-Type": "application/json" },
         method: "POST",
       });
@@ -227,28 +240,29 @@ export default function Home() {
     }
   }
 
-  async function updateTodayProduction(delta: number) {
-    const existingToday = history.find((record) => record.date === todayKey);
-    const startingStocks = existingToday?.startingStocks ?? currentStocks;
+  async function updateProductionForDate(date: string, delta: number) {
+    const existingRecord = history.find((record) => record.date === date);
+    const startingStocks =
+      existingRecord?.startingStocks ?? getStartingStocksForDate(date);
     const nextProductionToday = Math.max(
       0,
-      (existingToday?.productionAdded ?? productionToday) + delta,
+      (existingRecord?.productionAdded ?? 0) + delta,
     );
     const nextRecord: ProductionRecord = {
-      date: todayKey,
+      date,
       endingStocks:
-        startingStocks + nextProductionToday - getReleasedTotal(existingToday),
+        startingStocks + nextProductionToday - getReleasedTotal(existingRecord),
       productionAdded: nextProductionToday,
-      releases: existingToday?.releases ?? [],
+      releases: existingRecord?.releases ?? [],
       startingStocks,
     };
     const nextHistory = [
       nextRecord,
-      ...history.filter((record) => record.date !== todayKey),
+      ...history.filter((record) => record.date !== date),
     ];
 
     await saveState(nextHistory, nextRecord);
-    setReviewDate(todayKey);
+    setReviewDate(date);
   }
 
   function addProduction(event: FormEvent<HTMLFormElement>) {
@@ -259,7 +273,7 @@ export default function Home() {
       return;
     }
 
-    void updateTodayProduction(quantity);
+    void updateProductionForDate(entryDate, quantity);
     setProductionInput("");
   }
 
@@ -271,15 +285,16 @@ export default function Home() {
       return;
     }
 
-    void updateTodayProduction(-quantity);
+    void updateProductionForDate(entryDate, -quantity);
     setCorrectionInput("");
   }
 
   function resetToday() {
-    const existingToday = history.find((record) => record.date === todayKey);
-    const startingStocks = existingToday?.startingStocks ?? initialStocks;
+    const existingRecord = history.find((record) => record.date === entryDate);
+    const startingStocks =
+      existingRecord?.startingStocks ?? getStartingStocksForDate(entryDate);
     const nextRecord: ProductionRecord = {
-      date: todayKey,
+      date: entryDate,
       endingStocks: startingStocks,
       productionAdded: 0,
       releases: [],
@@ -287,10 +302,10 @@ export default function Home() {
     };
 
     void saveState(
-      [nextRecord, ...history.filter((record) => record.date !== todayKey)],
+      [nextRecord, ...history.filter((record) => record.date !== entryDate)],
       nextRecord,
     );
-    setReviewDate(todayKey);
+    setReviewDate(entryDate);
   }
 
   function releaseStocks(event: FormEvent<HTMLFormElement>) {
@@ -302,13 +317,15 @@ export default function Home() {
       return;
     }
 
-    const existingToday = history.find((record) => record.date === todayKey);
-    const baseRecord: ProductionRecord = existingToday ?? {
-      date: todayKey,
-      endingStocks: currentStocks,
+    const existingRecord = history.find((record) => record.date === entryDate);
+    const startingStocks =
+      existingRecord?.startingStocks ?? getStartingStocksForDate(entryDate);
+    const baseRecord: ProductionRecord = existingRecord ?? {
+      date: entryDate,
+      endingStocks: startingStocks,
       productionAdded: 0,
       releases: [],
-      startingStocks: currentStocks,
+      startingStocks,
     };
     const allowedQuantity = Math.min(quantity, baseRecord.endingStocks);
     if (allowedQuantity <= 0) {
@@ -333,14 +350,14 @@ export default function Home() {
     });
 
     void saveState(
-      [nextRecord, ...history.filter((record) => record.date !== todayKey)],
+      [nextRecord, ...history.filter((record) => record.date !== entryDate)],
       nextRecord,
     );
     setReleaseInput("");
     setReleaseName("");
     setOrderType("regular");
     setPaymentStatus("not_paid");
-    setReviewDate(todayKey);
+    setReviewDate(entryDate);
   }
 
   return (
@@ -467,6 +484,12 @@ export default function Home() {
             <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
               <Panel icon={Plus} title="Add Production">
                 <form className="grid gap-4" onSubmit={addProduction}>
+                  <DateField
+                    label="Entry Date"
+                    onChange={setEntryDate}
+                    todayKey={todayKey}
+                    value={entryDate}
+                  />
                   <NumberField
                     label="Quantity"
                     onChange={setProductionInput}
@@ -487,6 +510,12 @@ export default function Home() {
 
               <Panel icon={RotateCcw} title="Correct Input">
                 <form className="grid gap-4" onSubmit={correctProduction}>
+                  <DateField
+                    label="Entry Date"
+                    onChange={setEntryDate}
+                    todayKey={todayKey}
+                    value={entryDate}
+                  />
                   <NumberField
                     label="Subtract Quantity"
                     onChange={setCorrectionInput}
@@ -523,6 +552,12 @@ export default function Home() {
             <div className="grid gap-4 lg:grid-cols-[1fr_0.8fr]">
               <Panel icon={Send} title="Release Stocks">
                 <form className="grid gap-4" onSubmit={releaseStocks}>
+                  <DateField
+                    label="Entry Date"
+                    onChange={setEntryDate}
+                    todayKey={todayKey}
+                    value={entryDate}
+                  />
                   <TextField
                     label="Taken By"
                     onChange={setReleaseName}
@@ -741,6 +776,39 @@ function TextField({
         type="text"
         value={value}
       />
+    </label>
+  );
+}
+
+function DateField({
+  label,
+  onChange,
+  todayKey,
+  value,
+}: {
+  label: string;
+  onChange: (value: string) => void;
+  todayKey: string;
+  value: string;
+}) {
+  return (
+    <label className="grid gap-2">
+      <span className="text-sm font-medium text-zinc-300">{label}</span>
+      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+        <input
+          className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+          onChange={(event) => onChange(event.target.value)}
+          type="date"
+          value={value}
+        />
+        <button
+          className="h-12 rounded-[8px] border border-zinc-700 px-4 text-sm font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
+          onClick={() => onChange(todayKey)}
+          type="button"
+        >
+          Today
+        </button>
+      </div>
     </label>
   );
 }
