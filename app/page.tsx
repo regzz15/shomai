@@ -29,6 +29,7 @@ const productionStorageKey = "shomai-production-today";
 const historyStorageKey = "shomai-production-history";
 
 type Tab = "dashboard" | "production" | "release" | "consignment" | "history";
+type SalesTab = "release" | "stocks" | "summary" | "report";
 
 type ProductionRecord = {
   date: string;
@@ -188,6 +189,7 @@ export default function Home() {
   const [showCorrection, setShowCorrection] = useState(false);
   const [releaseInput, setReleaseInput] = useState("");
   const [releaseName, setReleaseName] = useState("");
+  const [salesTab, setSalesTab] = useState<SalesTab>("release");
   const [orderType, setOrderType] = useState<OrderType>("regular");
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("not_paid");
   const [entryDate, setEntryDate] = useState(todayKey);
@@ -976,12 +978,38 @@ export default function Home() {
           {activeTab === "release" && (
             <div className="grid gap-3">
               <section className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
-                <h2 className="text-xl font-semibold text-white">Release & Sales</h2>
-                <p className="mt-1 text-sm text-zinc-400">
-                  Record outgoing stocks first, then review sales totals below.
-                </p>
+                <div className="flex items-center gap-2">
+                  <ReceiptText aria-hidden="true" className="text-emerald-300" size={20} />
+                  <h2 className="text-xl font-semibold text-white">Sales</h2>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+                  {[
+                    { id: "summary" as const, label: "Sales Summary" },
+                    { id: "report" as const, label: "Sales Report" },
+                    { id: "stocks" as const, label: "Stocks Summary" },
+                    { id: "release" as const, label: "Release Stocks" },
+                  ].map((item) => {
+                    const selected = salesTab === item.id;
+
+                    return (
+                      <button
+                        className={`h-11 rounded-[8px] px-2 text-sm font-semibold transition-colors ${
+                          selected
+                            ? "bg-emerald-300 text-zinc-950"
+                            : "border border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800"
+                        }`}
+                        key={item.id}
+                        onClick={() => setSalesTab(item.id)}
+                        type="button"
+                      >
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </section>
-              <div className="grid gap-3 lg:grid-cols-[1fr_0.8fr]">
+
+              {salesTab === "release" && (
                 <Panel icon={Send} title="Release Stocks">
                   <form className="grid gap-4" onSubmit={releaseStocks}>
                     <DateField
@@ -1045,7 +1073,9 @@ export default function Home() {
                     </button>
                   </form>
                 </Panel>
+              )}
 
+              {salesTab === "stocks" && (
                 <Panel icon={Package} title="Stock Summary">
                   <div className="grid gap-3">
                     <SmallMetric label="Available stocks" value={currentStocks} />
@@ -1058,9 +1088,9 @@ export default function Home() {
                     <SmallMetric label="Released pcs" value={releasedPiecesToday} />
                   </div>
                 </Panel>
-              </div>
+              )}
 
-              <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+              {salesTab === "report" && (
                 <Panel icon={ReceiptText} title="Sales Reports">
                   <div className="grid gap-4">
                     <DateField
@@ -1093,7 +1123,9 @@ export default function Home() {
                     </label>
                   </div>
                 </Panel>
+              )}
 
+              {salesTab === "summary" && (
                 <Panel icon={BarChart3} title="Sales Summary">
                   <div className="grid gap-3">
                     <SmallMetric
@@ -1115,7 +1147,7 @@ export default function Home() {
                     <SmallMetric label="Year released" value={yearlyReleased} />
                   </div>
                 </Panel>
-              </div>
+              )}
             </div>
           )}
 
