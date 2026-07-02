@@ -9,6 +9,7 @@ import {
   Minus,
   Package,
   Plus,
+  ReceiptText,
   RotateCcw,
   Send,
   UserRound,
@@ -17,11 +18,13 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 const initialStocks = 26;
 const defaultPiecesPerStock = 30;
+const consignmentPrice = 100;
+const regularPrice = 150;
 const stockStorageKey = "shomai-current-stocks";
 const productionStorageKey = "shomai-production-today";
 const historyStorageKey = "shomai-production-history";
 
-type Tab = "dashboard" | "production" | "release" | "history";
+type Tab = "dashboard" | "production" | "release" | "reports" | "history";
 
 type ProductionRecord = {
   date: string;
@@ -78,6 +81,18 @@ function getReleasedTotal(record?: ProductionRecord) {
   return record?.releases.reduce((total, release) => total + release.quantity, 0) ?? 0;
 }
 
+function getReleasePrice(orderType: OrderType) {
+  return orderType === "consignment" ? consignmentPrice : regularPrice;
+}
+
+function getReleaseSales(release: StockRelease) {
+  return release.quantity * getReleasePrice(release.orderType);
+}
+
+function getRecordSales(record?: ProductionRecord) {
+  return record?.releases.reduce((total, release) => total + getReleaseSales(release), 0) ?? 0;
+}
+
 function normalizeRecord(record: ProductionRecord): ProductionRecord {
   const releases = Array.isArray(record.releases)
     ? record.releases.map((release) => ({
@@ -115,14 +130,37 @@ export default function Home() {
   const [syncStatus, setSyncStatus] = useState("Loading database");
   const [piecesPerStock, setPiecesPerStock] = useState(defaultPiecesPerStock);
   const [reviewDate, setReviewDate] = useState(todayKey);
+  const [reportDate, setReportDate] = useState(todayKey);
+  const [reportMonth, setReportMonth] = useState(todayKey.slice(0, 7));
+  const [reportYear, setReportYear] = useState(todayKey.slice(0, 4));
   const productionDate = formatDisplayDate(todayKey);
   const reviewedRecord = history.find((record) => record.date === reviewDate);
+  const reportDayRecord = history.find((record) => record.date === reportDate);
   const recentHistory = useMemo(() => sortHistory(history).slice(0, 5), [history]);
   const releasedToday = getReleasedTotal(history.find((record) => record.date === todayKey));
   const reviewedReleased = getReleasedTotal(reviewedRecord);
   const currentPieces = currentStocks * piecesPerStock;
   const productionPiecesToday = productionToday * piecesPerStock;
   const releasedPiecesToday = releasedToday * piecesPerStock;
+  const monthlyRecords = history.filter((record) => record.date.startsWith(reportMonth));
+  const yearlyRecords = history.filter((record) => record.date.startsWith(reportYear));
+  const dailySales = getRecordSales(reportDayRecord);
+  const monthlySales = monthlyRecords.reduce(
+    (total, record) => total + getRecordSales(record),
+    0,
+  );
+  const yearlySales = yearlyRecords.reduce(
+    (total, record) => total + getRecordSales(record),
+    0,
+  );
+  const monthlyReleased = monthlyRecords.reduce(
+    (total, record) => total + getReleasedTotal(record),
+    0,
+  );
+  const yearlyReleased = yearlyRecords.reduce(
+    (total, record) => total + getReleasedTotal(record),
+    0,
+  );
 
   function updateOrderType(nextOrderType: OrderType) {
     setOrderType(nextOrderType);
@@ -603,6 +641,70 @@ export default function Home() {
             </div>
           )}
 
+          {activeTab === "reports" && (
+            <div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+              <Panel icon={ReceiptText} title="Sales Reports">
+                <div className="grid gap-4">
+                  <DateField
+                    label="Daily Sales Date"
+                    onChange={setReportDate}
+                    todayKey={todayKey}
+                    value={reportDate}
+                  />
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium text-zinc-300">
+                      Month
+                    </span>
+                    <input
+                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+                      onChange={(event) => setReportMonth(event.target.value)}
+                      type="month"
+                      value={reportMonth}
+                    />
+                  </label>
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium text-zinc-300">
+                      Year
+                    </span>
+                    <input
+                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+                      onChange={(event) => setReportYear(event.target.value)}
+                      type="number"
+                      value={reportYear}
+                    />
+                  </label>
+                </div>
+              </Panel>
+
+              <Panel icon={BarChart3} title="Sales Summary">
+                <div className="grid gap-3">
+                  <SmallMetric label="Regular price" value={`PHP ${regularPrice}`} />
+                  <SmallMetric
+                    label="Consignment price"
+                    value={`PHP ${consignmentPrice}`}
+                  />
+                  <SmallMetric
+                    label="Daily sales"
+                    tone="emerald"
+                    value={`PHP ${dailySales}`}
+                  />
+                  <SmallMetric
+                    label="Monthly sales"
+                    tone="emerald"
+                    value={`PHP ${monthlySales}`}
+                  />
+                  <SmallMetric
+                    label="Yearly sales"
+                    tone="emerald"
+                    value={`PHP ${yearlySales}`}
+                  />
+                  <SmallMetric label="Month released" value={monthlyReleased} />
+                  <SmallMetric label="Year released" value={yearlyReleased} />
+                </div>
+              </Panel>
+            </div>
+          )}
+
           {activeTab === "history" && (
             <div className="grid gap-3 lg:grid-cols-[320px_1fr]">
               <Panel icon={CalendarDays} title="Review Date">
@@ -671,12 +773,13 @@ function BottomNav({
     { icon: HomeIcon, id: "dashboard" as Tab, label: "Home" },
     { icon: Plus, id: "production" as Tab, label: "Make" },
     { icon: Send, id: "release" as Tab, label: "Release" },
+    { icon: ReceiptText, id: "reports" as Tab, label: "Sales" },
     { icon: History, id: "history" as Tab, label: "History" },
   ];
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 shadow-2xl shadow-black/40 backdrop-blur sm:sticky sm:bottom-auto sm:mx-auto sm:mb-4 sm:max-w-3xl sm:rounded-[8px] sm:border">
-      <div className="mx-auto grid max-w-lg grid-cols-4 gap-2">
+      <div className="mx-auto grid max-w-lg grid-cols-5 gap-1.5">
         {items.map((item) => {
           const Icon = item.icon;
           const selected = activeTab === item.id;
@@ -892,6 +995,9 @@ function HistoryCard({
                 <p className="text-xs text-zinc-500">
                   {release.time} · {release.quantity * piecesPerStock} pcs ·{" "}
                   {orderTypeLabels[release.orderType]}
+                </p>
+                <p className="text-xs font-medium text-emerald-300">
+                  PHP {getReleaseSales(release)}
                 </p>
               </div>
               <div className="flex items-center justify-between gap-3 sm:justify-end">
