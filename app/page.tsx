@@ -2,7 +2,9 @@
 
 import {
   BarChart3,
+  Bell,
   CalendarDays,
+  Check,
   Factory,
   History,
   Home as HomeIcon,
@@ -32,6 +34,16 @@ type ProductionRecord = {
   productionAdded: number;
   releases: StockRelease[];
   endingStocks: number;
+};
+
+type ConsignmentOrder = {
+  id: string;
+  customerName: string;
+  packs: number;
+  requestDate: string;
+  notes: string;
+  status: "pending" | "accepted" | "done";
+  createdAt: string;
 };
 
 type StockRelease = {
@@ -127,6 +139,8 @@ export default function Home() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("not_paid");
   const [entryDate, setEntryDate] = useState(todayKey);
   const [history, setHistory] = useState<ProductionRecord[]>([]);
+  const [consignmentOrders, setConsignmentOrders] = useState<ConsignmentOrder[]>([]);
+  const [showOrders, setShowOrders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Loading database");
   const [piecesPerStock, setPiecesPerStock] = useState(defaultPiecesPerStock);
@@ -162,6 +176,9 @@ export default function Home() {
     (total, record) => total + getReleasedTotal(record),
     0,
   );
+  const pendingConsignmentOrders = consignmentOrders.filter(
+    (order) => order.status === "pending",
+  );
 
   function updateOrderType(nextOrderType: OrderType) {
     setOrderType(nextOrderType);
@@ -183,9 +200,39 @@ export default function Home() {
   useEffect(() => {
     loadRecords();
     loadConfig();
+    loadConsignmentOrders();
     // loadRecords is intentionally scoped to the current todayKey.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayKey]);
+
+  async function loadConsignmentOrders() {
+    try {
+      const response = await fetch("/api/consignment-orders");
+      if (!response.ok) {
+        return;
+      }
+
+      const data = (await response.json()) as { orders: ConsignmentOrder[] };
+      setConsignmentOrders(data.orders ?? []);
+    } catch {
+      setConsignmentOrders([]);
+    }
+  }
+
+  async function updateConsignmentOrder(
+    id: string,
+    status: ConsignmentOrder["status"],
+  ) {
+    const response = await fetch("/api/consignment-orders", {
+      body: JSON.stringify({ id, status }),
+      headers: { "Content-Type": "application/json" },
+      method: "PATCH",
+    });
+
+    if (response.ok) {
+      await loadConsignmentOrders();
+    }
+  }
 
   async function loadConfig() {
     try {
@@ -418,13 +465,79 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs font-medium text-zinc-300">
-              {formatDisplayDate(todayKey)}
+            <div className="flex items-center gap-2">
+              <button
+                className="relative grid h-10 w-10 place-items-center rounded-[8px] border border-zinc-800 bg-zinc-950 text-zinc-300"
+                onClick={() => setShowOrders((current) => !current)}
+                type="button"
+              >
+                <Bell aria-hidden="true" size={18} />
+                {pendingConsignmentOrders.length > 0 && (
+                  <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+                    {pendingConsignmentOrders.length}
+                  </span>
+                )}
+              </button>
+              <div className="rounded-full border border-zinc-800 bg-zinc-950 px-3 py-1 text-xs font-medium text-zinc-300">
+                {formatDisplayDate(todayKey)}
+              </div>
             </div>
           </div>
         </header>
 
         <section className="min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20 sm:p-6">
+          {showOrders && (
+            <section className="mb-3 rounded-[8px] border border-zinc-800 bg-zinc-950 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="font-semibold text-white">Consignment Requests</h2>
+                <button
+                  className="text-sm text-emerald-300"
+                  onClick={loadConsignmentOrders}
+                  type="button"
+                >
+                  Refresh
+                </button>
+              </div>
+              <div className="grid gap-2">
+                {consignmentOrders.length === 0 && (
+                  <p className="text-sm text-zinc-400">No requests yet.</p>
+                )}
+                {consignmentOrders.slice(0, 8).map((order) => (
+                  <article
+                    className="rounded-[8px] border border-zinc-800 bg-zinc-900 p-3"
+                    key={order.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-white">
+                          {order.customerName}
+                        </p>
+                        <p className="text-sm text-zinc-400">
+                          {order.packs} packs - {formatDisplayDate(order.requestDate)}
+                        </p>
+                        {order.notes && (
+                          <p className="mt-1 text-sm text-zinc-300">{order.notes}</p>
+                        )}
+                      </div>
+                      <span className="rounded-[8px] border border-zinc-700 px-2 py-1 text-xs text-zinc-300">
+                        {order.status}
+                      </span>
+                    </div>
+                    {order.status === "pending" && (
+                      <button
+                        className="mt-3 flex h-10 w-full items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+                        onClick={() => updateConsignmentOrder(order.id, "accepted")}
+                        type="button"
+                      >
+                        <Check aria-hidden="true" size={16} />
+                        Accept
+                      </button>
+                    )}
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
           <div className="mb-3 flex items-center justify-between gap-3 rounded-[8px] border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-300 sm:text-sm">
             <span>{syncStatus}</span>
             {isSaving && <span className="text-emerald-300">Saving...</span>}
