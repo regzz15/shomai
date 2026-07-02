@@ -20,6 +20,21 @@ self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+
+  if (event.data?.type === "SHOW_ORDER_NOTIFICATION") {
+    const title = event.data.title || "New consignment order";
+    const options = {
+      badge: "/icon.svg",
+      body: event.data.body || "Open production to review the request.",
+      data: {
+        url: "/",
+      },
+      icon: "/icon.svg",
+      tag: event.data.tag || "siomai-consignment-order",
+    };
+
+    event.waitUntil(self.registration.showNotification(title, options));
+  }
 });
 
 self.addEventListener("activate", (event) => {
@@ -69,5 +84,25 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() => caches.match(request)),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = new URL(event.notification.data?.url || "/", self.location.origin).href;
+
+  event.waitUntil(
+    self.clients
+      .matchAll({ includeUncontrolled: true, type: "window" })
+      .then((clients) => {
+        const existingClient = clients.find((client) => client.url === targetUrl);
+
+        if (existingClient) {
+          return existingClient.focus();
+        }
+
+        return self.clients.openWindow(targetUrl);
+      }),
   );
 });

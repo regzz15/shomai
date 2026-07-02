@@ -17,7 +17,7 @@ import {
   Send,
   UserRound,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 const initialStocks = 26;
 const defaultPiecesPerStock = 30;
@@ -184,6 +184,7 @@ export default function Home() {
   const [consignmentPinStatus, setConsignmentPinStatus] = useState("");
   const [showOrders, setShowOrders] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState("Notifications off");
   const [syncStatus, setSyncStatus] = useState("Loading database");
   const [piecesPerStock, setPiecesPerStock] = useState(defaultPiecesPerStock);
   const [reviewDate, setReviewDate] = useState(todayKey);
@@ -237,6 +238,7 @@ export default function Home() {
       }),
     [consignmentAccounts],
   );
+  const knownOrderIdsRef = useRef<Set<string> | null>(null);
 
   function updateOrderType(nextOrderType: OrderType) {
     setOrderType(nextOrderType);
@@ -264,6 +266,82 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todayKey]);
 
+  useEffect(() => {
+    if (!("Notification" in window)) {
+      setNotificationStatus("Notifications unavailable");
+      return;
+    }
+
+    setNotificationStatus(
+      Notification.permission === "granted"
+        ? "Notifications on"
+        : Notification.permission === "denied"
+          ? "Notifications blocked"
+          : "Notifications off",
+    );
+  }, []);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void loadConsignmentOrders();
+    }, 30000);
+
+    return () => window.clearInterval(interval);
+    // loadConsignmentOrders intentionally handles its own current refs/state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function requestOrderNotifications() {
+    if (!("Notification" in window)) {
+      setNotificationStatus("Notifications unavailable");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    setNotificationStatus(
+      permission === "granted"
+        ? "Notifications on"
+        : permission === "denied"
+          ? "Notifications blocked"
+          : "Notifications off",
+    );
+  }
+
+  function notifyNewPendingOrders(orders: ConsignmentOrder[]) {
+    const pendingOrders = orders.filter((order) => order.status === "pending");
+    const knownOrderIds = knownOrderIdsRef.current;
+    knownOrderIdsRef.current = new Set(orders.map((order) => order.id));
+
+    if (!knownOrderIds || !("Notification" in window) || Notification.permission !== "granted") {
+      return;
+    }
+
+    const newPendingOrders = pendingOrders.filter((order) => !knownOrderIds.has(order.id));
+    const newestOrder = newPendingOrders[0];
+    if (!newestOrder) {
+      return;
+    }
+
+    const title = "New consignment order";
+    const body = `${newestOrder.customerName} requested ${newestOrder.packs} packs for ${newestOrder.requestDate}.`;
+
+    if (navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        body,
+        tag: `consignment-order-${newestOrder.id}`,
+        title,
+        type: "SHOW_ORDER_NOTIFICATION",
+      });
+      return;
+    }
+
+    new Notification(title, {
+      body,
+      icon: "/icon.svg",
+      tag: `consignment-order-${newestOrder.id}`,
+    });
+  }
+
   async function loadConsignmentOrders() {
     try {
       const response = await fetch("/api/consignment-orders");
@@ -272,7 +350,9 @@ export default function Home() {
       }
 
       const data = (await response.json()) as { orders: ConsignmentOrder[] };
-      setConsignmentOrders(data.orders ?? []);
+      const nextOrders = data.orders ?? [];
+      notifyNewPendingOrders(nextOrders);
+      setConsignmentOrders(nextOrders);
     } catch {
       setConsignmentOrders([]);
     }
@@ -593,16 +673,25 @@ export default function Home() {
             <section className="fixed inset-x-3 top-[76px] z-40 mx-auto max-h-[calc(100vh-120px)] max-w-2xl overflow-y-auto rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 shadow-2xl shadow-black/50 sm:top-[88px]">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="font-semibold text-white">Consignment Requests</h2>
-                <button
-                  className="text-sm text-emerald-300"
-                  onClick={() => {
-                    void loadConsignmentOrders();
-                    void loadConsignmentAccounts();
-                  }}
-                  type="button"
-                >
-                  Refresh
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="rounded-[8px] border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200"
+                    onClick={() => void requestOrderNotifications()}
+                    type="button"
+                  >
+                    {notificationStatus}
+                  </button>
+                  <button
+                    className="text-sm text-emerald-300"
+                    onClick={() => {
+                      void loadConsignmentOrders();
+                      void loadConsignmentAccounts();
+                    }}
+                    type="button"
+                  >
+                    Refresh
+                  </button>
+                </div>
               </div>
               <div className="grid gap-2">
                 {consignmentOrders.length === 0 && (

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { ClipboardList, LogOut, Package, Pencil, Save, Send, ShieldCheck } from "lucide-react";
+import { ClipboardList, LogOut, Package, Save, Send, ShieldCheck, UserRound } from "lucide-react";
 
 type ConsignmentAccount = {
   address: string;
@@ -17,7 +17,7 @@ type ConsignmentSale = {
   quantity: number;
 };
 
-type Tab = "orders" | "stocks";
+type Tab = "orders" | "stocks" | "account";
 
 function getTodayKey() {
   return new Intl.DateTimeFormat("sv-SE", {
@@ -53,7 +53,6 @@ export default function ConsignmentPage() {
   const [sellQty, setSellQty] = useState("");
   const [saleDate, setSaleDate] = useState(getTodayKey());
   const [accountStatus, setAccountStatus] = useState("");
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const needsNameSetup = Boolean(account?.customerName.startsWith("Pending "));
 
@@ -140,7 +139,6 @@ export default function ConsignmentPage() {
 
     const data = (await response.json()) as { account: ConsignmentAccount };
     setAccount(normalizeAccount(data.account));
-    setIsEditingProfile(false);
     setAccountStatus("Account profile saved.");
   }
 
@@ -213,7 +211,6 @@ export default function ConsignmentPage() {
     setAccountStatus("");
     setContactNumber("");
     setAddress("");
-    setIsEditingProfile(false);
   }
 
   if (!account) {
@@ -338,57 +335,9 @@ export default function ConsignmentPage() {
               <LogOut aria-hidden="true" size={18} />
             </button>
           </div>
-          <div className="mt-3 grid gap-1 rounded-[8px] border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-300">
-            <p>{currentAccount.contactNumber || "No contact number"}</p>
-            <p className="text-zinc-500">{currentAccount.address || "No address"}</p>
-            <button
-              className="mt-2 flex h-10 items-center justify-center gap-2 rounded-[8px] border border-zinc-700 font-semibold text-zinc-200"
-              onClick={() => {
-                setContactNumber(currentAccount.contactNumber ?? "");
-                setAddress(currentAccount.address ?? "");
-                setIsEditingProfile((current) => !current);
-              }}
-              type="button"
-            >
-              <Pencil aria-hidden="true" size={16} />
-              Edit Account
-            </button>
-          </div>
         </header>
 
         <section className="mt-3 grid min-h-0 gap-3">
-          {isEditingProfile && (
-            <form
-              className="grid gap-4 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20"
-              onSubmit={saveProfile}
-            >
-              <h2 className="text-lg font-semibold">Account Details</h2>
-              <label className="grid gap-2">
-                <span className="text-sm text-zinc-300">Contact number</span>
-                <input
-                  className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
-                  inputMode="tel"
-                  onChange={(event) => setContactNumber(event.target.value)}
-                  value={contactNumber}
-                />
-              </label>
-              <label className="grid gap-2">
-                <span className="text-sm text-zinc-300">Address</span>
-                <textarea
-                  className="min-h-24 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-emerald-300"
-                  onChange={(event) => setAddress(event.target.value)}
-                  value={address}
-                />
-              </label>
-              <button
-                className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
-                type="submit"
-              >
-                <Save aria-hidden="true" size={18} />
-                Save Details
-              </button>
-            </form>
-          )}
           <div className="min-h-0 rounded-[8px] border border-zinc-800 bg-zinc-900 p-3 shadow-xl shadow-black/20">
           {activeTab === "orders" && (
             <form className="grid gap-4" onSubmit={submitOrder}>
@@ -524,15 +473,57 @@ export default function ConsignmentPage() {
               {accountStatus && <p className="text-sm text-zinc-300">{accountStatus}</p>}
             </div>
           )}
+
+          {activeTab === "account" && (
+            <form className="grid gap-4" onSubmit={saveProfile}>
+              <div>
+                <h2 className="text-lg font-semibold">Account</h2>
+                <p className="mt-1 text-sm text-zinc-400">
+                  Keep your contact details updated for production.
+                </p>
+              </div>
+              <div className="grid gap-1 rounded-[8px] border border-zinc-800 bg-zinc-950 p-3 text-sm text-zinc-300">
+                <p className="font-semibold text-white">{currentAccount.customerName}</p>
+                <p>{currentAccount.contactNumber || "No contact number"}</p>
+                <p className="text-zinc-500">{currentAccount.address || "No address"}</p>
+              </div>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Contact number</span>
+                <input
+                  className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 outline-none focus:border-emerald-300"
+                  inputMode="tel"
+                  onChange={(event) => setContactNumber(event.target.value)}
+                  value={contactNumber}
+                />
+              </label>
+              <label className="grid gap-2">
+                <span className="text-sm text-zinc-300">Address</span>
+                <textarea
+                  className="min-h-24 rounded-[8px] border border-zinc-700 bg-zinc-950 px-4 py-3 outline-none focus:border-emerald-300"
+                  onChange={(event) => setAddress(event.target.value)}
+                  value={address}
+                />
+              </label>
+              <button
+                className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-emerald-300 font-semibold text-zinc-950"
+                type="submit"
+              >
+                <Save aria-hidden="true" size={18} />
+                Save Account
+              </button>
+              {accountStatus && <p className="text-sm text-zinc-300">{accountStatus}</p>}
+            </form>
+          )}
           </div>
         </section>
       </section>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-3 pt-2 backdrop-blur">
-        <div className="mx-auto grid max-w-md grid-cols-2 gap-2">
+        <div className="mx-auto grid max-w-md grid-cols-3 gap-2">
           {[
             { icon: ClipboardList, id: "orders" as const, label: "Orders" },
             { icon: Package, id: "stocks" as const, label: "Stocks" },
+            { icon: UserRound, id: "account" as const, label: "Account" },
           ].map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
