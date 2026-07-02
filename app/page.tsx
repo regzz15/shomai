@@ -475,6 +475,41 @@ export default function Home() {
     await loadConsignmentAccounts();
   }
 
+  async function removeConsignmentPin(customerName: string) {
+    const response = await fetch("/api/consignment-accounts", {
+      body: JSON.stringify({
+        action: "remove_pin",
+        customerName,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    if (response.ok) {
+      await loadConsignmentAccounts();
+    }
+  }
+
+  async function deleteConsignmentAccount(customerName: string) {
+    const shouldDelete = window.confirm(`Delete consignment account "${customerName}"?`);
+    if (!shouldDelete) {
+      return;
+    }
+
+    const response = await fetch("/api/consignment-accounts", {
+      body: JSON.stringify({
+        action: "delete",
+        customerName,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+
+    if (response.ok) {
+      await loadConsignmentAccounts();
+    }
+  }
+
   async function loadConfig() {
     try {
       const response = await fetch("/api/config");
@@ -1184,6 +1219,23 @@ export default function Home() {
                             ))}
                           </div>
                         )}
+                        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-zinc-800 pt-3">
+                          <button
+                            className="h-10 rounded-[8px] border border-zinc-700 text-sm font-semibold text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={!account.pinCode}
+                            onClick={() => void removeConsignmentPin(account.customerName)}
+                            type="button"
+                          >
+                            Remove PIN
+                          </button>
+                          <button
+                            className="h-10 rounded-[8px] border border-red-900/80 text-sm font-semibold text-red-200"
+                            onClick={() => void deleteConsignmentAccount(account.customerName)}
+                            type="button"
+                          >
+                            Delete Account
+                          </button>
+                        </div>
                       </article>
                     ))}
                   </div>

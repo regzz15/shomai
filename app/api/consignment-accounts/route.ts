@@ -185,7 +185,7 @@ export async function POST(request: Request) {
   }
 
   const body = (await request.json()) as {
-    action?: "claim" | "create" | "profile" | "receive" | "sell";
+    action?: "claim" | "create" | "delete" | "profile" | "receive" | "remove_pin" | "sell";
     address?: string;
     contactNumber?: string;
     customerName?: string;
@@ -310,6 +310,50 @@ export async function POST(request: Request) {
     }
 
     return Response.json({ account: toAccount(result.rows[0]) });
+  }
+
+  if (body.action === "remove_pin") {
+    if (!customerName) {
+      return Response.json({ error: "Missing account name." }, { status: 400 });
+    }
+
+    const result = await pool.query(
+      `
+        update siomai_consignment_accounts
+        set pin_code = null,
+            updated_at = now()
+        where lower(customer_name) = lower($1)
+        returning customer_name, pin_code, contact_number, address, current_stocks, sold_stocks, sales_by_date, updated_at
+      `,
+      [customerName],
+    );
+
+    if (result.rowCount === 0) {
+      return Response.json({ error: "Account not found." }, { status: 404 });
+    }
+
+    return Response.json({ account: toAccount(result.rows[0], true) });
+  }
+
+  if (body.action === "delete") {
+    if (!customerName) {
+      return Response.json({ error: "Missing account name." }, { status: 400 });
+    }
+
+    const result = await pool.query(
+      `
+        delete from siomai_consignment_accounts
+        where lower(customer_name) = lower($1)
+        returning customer_name
+      `,
+      [customerName],
+    );
+
+    if (result.rowCount === 0) {
+      return Response.json({ error: "Account not found." }, { status: 404 });
+    }
+
+    return Response.json({ ok: true });
   }
 
   if (body.action !== "receive" && body.action !== "sell") {
