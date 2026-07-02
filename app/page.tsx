@@ -120,6 +120,7 @@ export default function Home() {
   const [productionToday, setProductionToday] = useState(0);
   const [productionInput, setProductionInput] = useState("");
   const [correctionInput, setCorrectionInput] = useState("");
+  const [showCorrection, setShowCorrection] = useState(false);
   const [releaseInput, setReleaseInput] = useState("");
   const [releaseName, setReleaseName] = useState("");
   const [orderType, setOrderType] = useState<OrderType>("regular");
@@ -462,7 +463,7 @@ export default function Home() {
           )}
 
           {activeTab === "production" && (
-            <div className="grid gap-3 lg:grid-cols-[1fr_1fr]">
+            <div className="grid gap-3">
               <Panel icon={Plus} title="Add Production">
                 <form className="grid gap-4" onSubmit={addProduction}>
                   <DateField
@@ -489,43 +490,62 @@ export default function Home() {
                 </form>
               </Panel>
 
-              <Panel icon={RotateCcw} title="Correct Input">
-                <form className="grid gap-4" onSubmit={correctProduction}>
-                  <DateField
-                    label="Entry Date"
-                    onChange={setEntryDate}
-                    todayKey={todayKey}
-                    value={entryDate}
-                  />
-                  <NumberField
-                    label="Subtract Quantity"
-                    onChange={setCorrectionInput}
-                    placeholder="Enter amount to subtract"
-                    value={correctionInput}
-                  />
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <button
-                      aria-label="Subtract production"
-                      className="flex h-12 items-center justify-center gap-2 rounded-[8px] border border-zinc-700 px-4 font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
-                      title="Subtract production"
-                      type="submit"
-                    >
-                      <Minus aria-hidden="true" size={18} />
-                      Subtract
-                    </button>
-                    <button
-                      aria-label="Reset today"
-                      className="flex h-12 items-center justify-center gap-2 rounded-[8px] border border-red-900/80 px-4 font-semibold text-red-200 transition-colors hover:bg-red-950/40"
-                      onClick={resetToday}
-                      title="Reset today"
-                      type="button"
-                    >
-                      <RotateCcw aria-hidden="true" size={18} />
-                      Reset
-                    </button>
-                  </div>
-                </form>
-              </Panel>
+              <section className="rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:p-5">
+                <button
+                  className="flex h-12 w-full items-center justify-between rounded-[8px] border border-zinc-800 bg-zinc-900 px-4 text-left font-semibold text-zinc-200 transition-colors hover:bg-zinc-800"
+                  onClick={() => setShowCorrection((current) => !current)}
+                  type="button"
+                >
+                  <span className="flex items-center gap-2">
+                    <RotateCcw aria-hidden="true" size={18} />
+                    Correction
+                  </span>
+                  <span className="text-xs text-zinc-500">
+                    {showCorrection ? "Hide" : "Open"}
+                  </span>
+                </button>
+
+                {showCorrection && (
+                  <form
+                    className="mt-4 grid gap-4 border-t border-zinc-800 pt-4"
+                    onSubmit={correctProduction}
+                  >
+                    <DateField
+                      label="Entry Date"
+                      onChange={setEntryDate}
+                      todayKey={todayKey}
+                      value={entryDate}
+                    />
+                    <NumberField
+                      label="Subtract Quantity"
+                      onChange={setCorrectionInput}
+                      placeholder="Enter amount to subtract"
+                      value={correctionInput}
+                    />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button
+                        aria-label="Subtract production"
+                        className="flex h-12 items-center justify-center gap-2 rounded-[8px] border border-zinc-700 px-4 font-semibold text-zinc-200 transition-colors hover:bg-zinc-900"
+                        title="Subtract production"
+                        type="submit"
+                      >
+                        <Minus aria-hidden="true" size={18} />
+                        Subtract
+                      </button>
+                      <button
+                        aria-label="Reset selected date"
+                        className="flex h-12 items-center justify-center gap-2 rounded-[8px] border border-red-900/80 px-4 font-semibold text-red-200 transition-colors hover:bg-red-950/40"
+                        onClick={resetToday}
+                        title="Reset selected date"
+                        type="button"
+                      >
+                        <RotateCcw aria-hidden="true" size={18} />
+                        Reset
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </section>
             </div>
           )}
 
