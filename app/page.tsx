@@ -10,6 +10,7 @@ import {
   History,
   Home as HomeIcon,
   KeyRound,
+  LayoutGrid,
   Minus,
   MoreVertical,
   Package,
@@ -201,6 +202,7 @@ export default function Home() {
   const [consignmentPinStatus, setConsignmentPinStatus] = useState("");
   const [openConsignmentMenu, setOpenConsignmentMenu] = useState("");
   const [showAddConsignment, setShowAddConsignment] = useState(false);
+  const [showMainMenu, setShowMainMenu] = useState(false);
   const [showOrders, setShowOrders] = useState(false);
   const [unreadOrderIds, setUnreadOrderIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -1398,12 +1400,16 @@ export default function Home() {
       </main>
       <BottomNav
         activeTab={activeTab}
+        showMainMenu={showMainMenu}
         setActiveTab={(tab) => {
           setActiveTab(tab);
+          setShowMainMenu(false);
           if (tab === "orders") {
             setUnreadOrderIds([]);
           }
         }}
+        setShowMainMenu={setShowMainMenu}
+        unreadOrderCount={unreadOrderCount}
       />
     </div>
   );
@@ -1411,13 +1417,18 @@ export default function Home() {
 
 function BottomNav({
   activeTab,
+  setShowMainMenu,
   setActiveTab,
+  showMainMenu,
+  unreadOrderCount,
 }: {
   activeTab: Tab;
+  setShowMainMenu: (show: boolean | ((current: boolean) => boolean)) => void;
   setActiveTab: (tab: Tab) => void;
+  showMainMenu: boolean;
+  unreadOrderCount: number;
 }) {
-  const items = [
-    { icon: HomeIcon, id: "dashboard" as Tab, label: "Dashboard" },
+  const menuItems = [
     { icon: ClipboardList, id: "orders" as Tab, label: "Orders" },
     { icon: Plus, id: "production" as Tab, label: "Produce" },
     { icon: Send, id: "release" as Tab, label: "Sales" },
@@ -1426,29 +1437,92 @@ function BottomNav({
   ];
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 shadow-2xl shadow-black/40 backdrop-blur sm:sticky sm:bottom-auto sm:mx-auto sm:mb-4 sm:max-w-3xl sm:rounded-[8px] sm:border">
-      <div className="mx-auto grid max-w-lg grid-cols-6 gap-1">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const selected = activeTab === item.id;
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 shadow-2xl shadow-black/40 backdrop-blur sm:sticky sm:bottom-auto sm:mx-auto sm:mb-4 sm:max-w-2xl sm:rounded-[8px] sm:border">
+      {showMainMenu && (
+        <div className="absolute inset-x-3 bottom-[76px] mx-auto max-w-sm rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 shadow-2xl shadow-black/50 sm:bottom-[88px]">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm font-semibold text-white">Menu</p>
+            <p className="text-xs text-zinc-500">Production tools</p>
+          </div>
+          <div className="grid grid-cols-5 gap-3">
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const selected = activeTab === item.id;
 
-          return (
-            <button
-              aria-label={item.label}
-              className={`grid h-14 min-w-0 place-items-center rounded-[8px] px-1 text-[10px] font-medium transition-colors sm:text-xs ${
-                selected
-                  ? "bg-emerald-300 text-zinc-950"
-                  : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
-              }`}
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              type="button"
-            >
-              <Icon aria-hidden="true" size={20} />
-              <span className="mt-1 max-w-full truncate">{item.label}</span>
-            </button>
-          );
-        })}
+              return (
+                <button
+                  aria-label={item.label}
+                  className={`grid min-w-0 justify-items-center gap-1 rounded-[8px] p-2 text-[10px] font-medium transition-colors ${
+                    selected
+                      ? "bg-emerald-300 text-zinc-950"
+                      : "text-zinc-300 hover:bg-zinc-900 hover:text-white"
+                  }`}
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  type="button"
+                >
+                  <span
+                    className={`grid h-11 w-11 place-items-center rounded-[8px] ${
+                      selected ? "bg-zinc-950/10" : "bg-zinc-900"
+                    }`}
+                  >
+                    <Icon aria-hidden="true" size={22} />
+                  </span>
+                  <span className="max-w-full truncate">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="mx-auto grid max-w-md grid-cols-3 items-end gap-2">
+        <button
+          aria-label="Dashboard"
+          className={`grid h-14 place-items-center rounded-[8px] text-[11px] font-medium transition-colors ${
+            activeTab === "dashboard"
+              ? "bg-emerald-300 text-zinc-950"
+              : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+          }`}
+          onClick={() => setActiveTab("dashboard")}
+          type="button"
+        >
+          <HomeIcon aria-hidden="true" size={21} />
+          <span>Dashboard</span>
+        </button>
+
+        <button
+          aria-label="Open menu"
+          className={`mx-auto grid h-16 w-16 place-items-center rounded-full border text-[11px] font-semibold shadow-xl shadow-black/30 transition-colors ${
+            showMainMenu
+              ? "border-emerald-300 bg-emerald-300 text-zinc-950"
+              : "border-zinc-700 bg-zinc-900 text-zinc-200"
+          }`}
+          onClick={() => setShowMainMenu((current) => !current)}
+          type="button"
+        >
+          <LayoutGrid aria-hidden="true" size={24} />
+          <span className="sr-only">Menu</span>
+        </button>
+
+        <button
+          aria-label="Orders"
+          className={`relative grid h-14 place-items-center rounded-[8px] text-[11px] font-medium transition-colors ${
+            activeTab === "orders"
+              ? "bg-emerald-300 text-zinc-950"
+              : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+          }`}
+          onClick={() => setActiveTab("orders")}
+          type="button"
+        >
+          <ClipboardList aria-hidden="true" size={21} />
+          <span>Orders</span>
+          {unreadOrderCount > 0 && (
+            <span className="absolute right-5 top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-xs font-bold text-white">
+              {unreadOrderCount}
+            </span>
+          )}
+        </button>
       </div>
     </nav>
   );
