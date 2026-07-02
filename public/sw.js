@@ -87,6 +87,22 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+self.addEventListener("push", (event) => {
+  const payload = event.data?.json() || {};
+  const title = payload.title || "New consignment order";
+  const options = {
+    badge: "/icon.svg",
+    body: payload.body || "Open production to review the request.",
+    data: {
+      url: payload.url || "/",
+    },
+    icon: "/icon.svg",
+    tag: payload.tag || "siomai-consignment-order",
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 

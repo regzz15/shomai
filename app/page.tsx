@@ -164,6 +164,19 @@ function normalizeRecord(record: ProductionRecord): ProductionRecord {
   };
 }
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = `${base64String}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let index = 0; index < rawData.length; index += 1) {
+    outputArray[index] = rawData.charCodeAt(index);
+  }
+
+  return outputArray;
+}
+
 export default function Home() {
   const todayKey = getTodayKey();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
@@ -292,19 +305,54 @@ export default function Home() {
   }, []);
 
   async function requestOrderNotifications() {
-    if (!("Notification" in window)) {
-      setNotificationStatus("Notifications unavailable");
-      return;
-    }
+    try {
+      if (!("Notification" in window)) {
+        setNotificationStatus("Notifications unavailable");
+        return;
+      }
 
-    const permission = await Notification.requestPermission();
-    setNotificationStatus(
-      permission === "granted"
-        ? "Notifications on"
-        : permission === "denied"
-          ? "Notifications blocked"
-          : "Notifications off",
-    );
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setNotificationStatus(
+          permission === "denied" ? "Notifications blocked" : "Notifications off",
+        );
+        return;
+      }
+
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        setNotificationStatus("Push unavailable");
+        return;
+      }
+
+      setNotificationStatus("Saving notifications");
+      const registration = await navigator.serviceWorker.ready;
+      const keyResponse = await fetch("/api/push-subscriptions");
+      const keyData = (await keyResponse.json()) as { publicKey?: string };
+      if (!keyData.publicKey) {
+        setNotificationStatus("Missing VAPID key");
+        return;
+      }
+
+      const existingSubscription = await registration.pushManager.getSubscription();
+      const subscription =
+        existingSubscription ??
+        (await registration.pushManager.subscribe({
+          applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+          userVisibleOnly: true,
+        }));
+
+      const saveResponse = await fetch("/api/push-subscriptions", {
+        body: JSON.stringify(subscription),
+        headers: { "Content-Type": "application/json" },
+        method: "POST",
+      });
+
+      setNotificationStatus(
+        saveResponse.ok ? "Notifications on" : "Push save failed",
+      );
+    } catch {
+      setNotificationStatus("Push setup failed");
+    }
   }
 
   function notifyNewPendingOrders(orders: ConsignmentOrder[]) {

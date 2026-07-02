@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import webPush, { PushSubscription } from "web-push";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,11 @@ type ConsignmentOrder = {
   notes: string;
   status: OrderStatus;
   createdAt: string;
+};
+
+type PushSubscriptionRow = {
+  endpoint: string;
+  subscription: PushSubscription;
 };
 
 const connectionString =
@@ -44,6 +50,17 @@ async function ensureTable() {
       notes text not null default '',
       status text not null default 'pending',
       created_at timestamptz not null default now()
+    )
+  `);
+}
+
+async function ensurePushSubscriptionTable() {
+  await pool.query(`
+    create table if not exists siomai_push_subscriptions (
+      endpoint text primary key,
+      subscription jsonb not null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
     )
   `);
 }
@@ -82,6 +99,50 @@ function toOrder(row: {
     requestDate: row.request_date,
     status: row.status,
   };
+}
+
+async function sendOrderPushNotification(order: ConsignmentOrder) {
+  const publicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const privateKey = process.env.VAPID_PRIVATE_KEY;
+  const subject = process.env.VAPID_SUBJECT ?? "mailto:admin@example.com";
+
+  if (!publicKey || !privateKey) {
+    return;
+  }
+
+  webPush.setVapidDetails(subject, publicKey, privateKey);
+  await ensurePushSubscriptionTable();
+
+  const result = await pool.query<PushSubscriptionRow>(`
+    select endpoint, subscription
+    from siomai_push_subscriptions
+  `);
+
+  const payload = JSON.stringify({
+    body: `${order.customerName} requested ${order.packs} packs for ${order.requestDate}.`,
+    tag: `consignment-order-${order.id}`,
+    title: "New consignment order",
+    url: "/",
+  });
+
+  await Promise.allSettled(
+    result.rows.map(async (row) => {
+      try {
+        await webPush.sendNotification(row.subscription, payload);
+      } catch (error) {
+        const statusCode = (error as { statusCode?: number }).statusCode;
+        if (statusCode === 404 || statusCode === 410) {
+          await pool.query(
+            `
+              delete from siomai_push_subscriptions
+              where endpoint = $1
+            `,
+            [row.endpoint],
+          );
+        }
+      }
+    }),
+  );
 }
 
 export async function GET() {
@@ -152,7 +213,10 @@ export async function POST(request: Request) {
     [customerName, packs, requestDate, notes],
   );
 
-  return Response.json({ order: toOrder(result.rows[0]) });
+  const order = toOrder(result.rows[0]);
+  void sendOrderPushNotification(order);
+
+  return Response.json({ order });
 }
 
 export async function PATCH(request: Request) {
