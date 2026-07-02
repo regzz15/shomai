@@ -1429,7 +1429,6 @@ function BottomNav({
   unreadOrderCount: number;
 }) {
   const menuItems = [
-    { icon: ClipboardList, id: "orders" as Tab, label: "Orders" },
     { icon: Plus, id: "production" as Tab, label: "Produce" },
     { icon: Send, id: "release" as Tab, label: "Sales" },
     { icon: UserRound, id: "consignment" as Tab, label: "Consign" },
@@ -1439,12 +1438,12 @@ function BottomNav({
   return (
     <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-800 bg-zinc-950/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 shadow-2xl shadow-black/40 backdrop-blur sm:sticky sm:bottom-auto sm:mx-auto sm:mb-4 sm:max-w-2xl sm:rounded-[8px] sm:border">
       {showMainMenu && (
-        <div className="absolute inset-x-3 bottom-[76px] mx-auto max-w-sm rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 shadow-2xl shadow-black/50 sm:bottom-[88px]">
+        <div className="absolute inset-x-3 bottom-[76px] mx-auto max-w-xs rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 shadow-2xl shadow-black/50 sm:bottom-[88px]">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-semibold text-white">Menu</p>
-            <p className="text-xs text-zinc-500">Production tools</p>
+            <p className="text-xs text-zinc-500">Tools</p>
           </div>
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             {menuItems.map((item) => {
               const Icon = item.icon;
               const selected = activeTab === item.id;
@@ -1480,9 +1479,11 @@ function BottomNav({
         <button
           aria-label="Dashboard"
           className={`grid h-14 place-items-center rounded-[8px] text-[11px] font-medium transition-colors ${
-            activeTab === "dashboard"
+            activeTab === "dashboard" && !showMainMenu
               ? "bg-emerald-300 text-zinc-950"
-              : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+              : showMainMenu
+                ? "text-zinc-500"
+                : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
           }`}
           onClick={() => setActiveTab("dashboard")}
           type="button"
@@ -1508,9 +1509,11 @@ function BottomNav({
         <button
           aria-label="Orders"
           className={`relative grid h-14 place-items-center rounded-[8px] text-[11px] font-medium transition-colors ${
-            activeTab === "orders"
+            activeTab === "orders" && !showMainMenu
               ? "bg-emerald-300 text-zinc-950"
-              : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+              : showMainMenu
+                ? "text-zinc-500"
+                : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
           }`}
           onClick={() => setActiveTab("orders")}
           type="button"
