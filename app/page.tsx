@@ -123,6 +123,14 @@ export default function Home() {
   const productionPiecesToday = productionToday * piecesPerStock;
   const releasedPiecesToday = releasedToday * piecesPerStock;
 
+  function updateOrderType(nextOrderType: OrderType) {
+    setOrderType(nextOrderType);
+
+    if (nextOrderType === "consignment") {
+      setPaymentStatus("not_paid");
+    }
+  }
+
   // localStorage hydration needs to update client state after mount.
   useEffect(() => {
     loadRecords();
@@ -310,7 +318,7 @@ export default function Home() {
     const nextRelease: StockRelease = {
       id: `${Date.now()}`,
       orderType,
-      paymentStatus,
+      paymentStatus: orderType === "consignment" ? "not_paid" : paymentStatus,
       quantity: allowedQuantity,
       takenBy,
       time: new Intl.DateTimeFormat("en-PH", {
@@ -534,7 +542,7 @@ export default function Home() {
                     <select
                       className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
                       onChange={(event) =>
-                        setOrderType(event.target.value as OrderType)
+                        updateOrderType(event.target.value as OrderType)
                       }
                       value={orderType}
                     >
@@ -547,11 +555,12 @@ export default function Home() {
                       Payment Status
                     </span>
                     <select
-                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={orderType === "consignment"}
                       onChange={(event) =>
                         setPaymentStatus(event.target.value as PaymentStatus)
                       }
-                      value={paymentStatus}
+                      value={orderType === "consignment" ? "not_paid" : paymentStatus}
                     >
                       <option value="not_paid">Not Paid</option>
                       <option value="partial">Partial</option>
