@@ -33,13 +33,20 @@ type ProductionRecord = {
 
 type StockRelease = {
   id: string;
+  orderType: OrderType;
   paymentStatus: PaymentStatus;
   quantity: number;
   takenBy: string;
   time: string;
 };
 
+type OrderType = "consignment" | "regular";
 type PaymentStatus = "paid" | "partial" | "not_paid";
+
+const orderTypeLabels: Record<OrderType, string> = {
+  consignment: "Consignment",
+  regular: "Regular Order",
+};
 
 const paymentLabels: Record<PaymentStatus, string> = {
   not_paid: "Not Paid",
@@ -75,6 +82,7 @@ function normalizeRecord(record: ProductionRecord): ProductionRecord {
   const releases = Array.isArray(record.releases)
     ? record.releases.map((release) => ({
         ...release,
+        orderType: release.orderType ?? ("regular" as OrderType),
         paymentStatus: release.paymentStatus ?? ("not_paid" as PaymentStatus),
       }))
     : [];
@@ -99,6 +107,7 @@ export default function Home() {
   const [correctionInput, setCorrectionInput] = useState("");
   const [releaseInput, setReleaseInput] = useState("");
   const [releaseName, setReleaseName] = useState("");
+  const [orderType, setOrderType] = useState<OrderType>("regular");
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("not_paid");
   const [history, setHistory] = useState<ProductionRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -300,6 +309,7 @@ export default function Home() {
 
     const nextRelease: StockRelease = {
       id: `${Date.now()}`,
+      orderType,
       paymentStatus,
       quantity: allowedQuantity,
       takenBy,
@@ -320,6 +330,7 @@ export default function Home() {
     );
     setReleaseInput("");
     setReleaseName("");
+    setOrderType("regular");
     setPaymentStatus("not_paid");
     setReviewDate(todayKey);
   }
@@ -516,6 +527,21 @@ export default function Home() {
                     placeholder="Enter quantity"
                     value={releaseInput}
                   />
+                  <label className="grid gap-2">
+                    <span className="text-sm font-medium text-zinc-300">
+                      Order Type
+                    </span>
+                    <select
+                      className="h-12 rounded-[8px] border border-zinc-700 bg-zinc-900 px-4 text-base text-white outline-none transition-colors focus:border-emerald-300"
+                      onChange={(event) =>
+                        setOrderType(event.target.value as OrderType)
+                      }
+                      value={orderType}
+                    >
+                      <option value="regular">Regular Order</option>
+                      <option value="consignment">Consignment</option>
+                    </select>
+                  </label>
                   <label className="grid gap-2">
                     <span className="text-sm font-medium text-zinc-300">
                       Payment Status
@@ -769,7 +795,8 @@ function HistoryCard({
                   {release.takenBy}
                 </p>
                 <p className="text-xs text-zinc-500">
-                  {release.time} · {release.quantity * piecesPerStock} pcs
+                  {release.time} · {release.quantity * piecesPerStock} pcs ·{" "}
+                  {orderTypeLabels[release.orderType]}
                 </p>
               </div>
               <div className="flex items-center justify-between gap-3 sm:justify-end">

@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 
 type StockRelease = {
   id: string;
+  orderType?: "consignment" | "regular";
   paymentStatus?: "paid" | "partial" | "not_paid";
   quantity: number;
   takenBy: string;
