@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-const initialStocks = 26;
+const initialStocks = 0;
 const defaultPiecesPerStock = 30;
 const consignmentPrice = 100;
 const regularPrice = 150;
@@ -206,6 +206,10 @@ export default function Home() {
   const [showOrders, setShowOrders] = useState(false);
   const [unreadOrderIds, setUnreadOrderIds] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [notice, setNotice] = useState<{
+    message: string;
+    tone: "error" | "success";
+  } | null>(null);
   const [notificationStatus, setNotificationStatus] = useState("Notifications off");
   const [syncStatus, setSyncStatus] = useState("Loading database");
   const [piecesPerStock, setPiecesPerStock] = useState(defaultPiecesPerStock);
@@ -272,6 +276,11 @@ export default function Home() {
   );
   const knownOrderIdsRef = useRef<Set<string> | null>(null);
 
+  function showNotice(message: string, tone: "error" | "success" = "success") {
+    setNotice({ message, tone });
+    window.setTimeout(() => setNotice(null), 3500);
+  }
+
   function updateOrderType(nextOrderType: OrderType) {
     setOrderType(nextOrderType);
 
@@ -292,8 +301,10 @@ export default function Home() {
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get("tab");
     if (tab === "orders") {
-      setActiveTab("orders");
-      setShowOrders(false);
+      globalThis.queueMicrotask(() => {
+        setActiveTab("orders");
+        setShowOrders(false);
+      });
     }
 
     loadRecords();
@@ -306,17 +317,21 @@ export default function Home() {
 
   useEffect(() => {
     if (!("Notification" in window)) {
-      setNotificationStatus("Notifications unavailable");
+      globalThis.queueMicrotask(() => {
+        setNotificationStatus("Notifications unavailable");
+      });
       return;
     }
 
-    setNotificationStatus(
-      Notification.permission === "granted"
-        ? "Notifications on"
-        : Notification.permission === "denied"
-          ? "Notifications blocked"
-          : "Notifications off",
-    );
+    globalThis.queueMicrotask(() => {
+      setNotificationStatus(
+        Notification.permission === "granted"
+          ? "Notifications on"
+          : Notification.permission === "denied"
+            ? "Notifications blocked"
+            : "Notifications off",
+      );
+    });
   }, []);
 
   useEffect(() => {
@@ -571,24 +586,10 @@ export default function Home() {
       const nextHistory = sortHistory((data.records ?? []).map(normalizeRecord));
       const todayRecord = nextHistory.find((record) => record.date === todayKey);
 
-      if (todayRecord) {
-        setHistory(nextHistory);
-        setCurrentStocks(todayRecord.endingStocks);
-        setProductionToday(todayRecord.productionAdded);
-        setSyncStatus("Synced");
-        return;
-      }
-
-      const previousRecord = nextHistory[0];
-      const newTodayRecord: ProductionRecord = {
-        date: todayKey,
-        endingStocks: previousRecord?.endingStocks ?? initialStocks,
-        productionAdded: 0,
-        releases: [],
-        startingStocks: previousRecord?.endingStocks ?? initialStocks,
-      };
-
-      await saveState([newTodayRecord, ...nextHistory], newTodayRecord);
+      setHistory(nextHistory);
+      setCurrentStocks(todayRecord?.endingStocks ?? nextHistory[0]?.endingStocks ?? initialStocks);
+      setProductionToday(todayRecord?.productionAdded ?? 0);
+      setSyncStatus("Synced");
     } catch {
       setSyncStatus("Database unavailable");
     }
@@ -626,8 +627,10 @@ export default function Home() {
         throw new Error("Unable to save record.");
       }
       setSyncStatus("Synced");
+      return true;
     } catch {
       setSyncStatus("Save failed");
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -654,31 +657,82 @@ export default function Home() {
       ...history.filter((record) => record.date !== date),
     ];
 
-    await saveState(nextHistory, nextRecord);
-    setReviewDate(date);
+    return saveState(nextHistory, nextRecord);
   }
 
-  function addProduction(event: FormEvent<HTMLFormElement>) {
+  async function resetAllData() {
+    const shouldReset = window.confirm(
+      "Reset all production and sales records to zero? This will empty the records database.",
+    );
+    if (!shouldReset) {
+      return;
+    }
+
+    setIsSaving(true);
+    setSyncStatus("Resetting");
+    try {
+      const response = await fetch("/api/records", { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error("Unable to reset records.");
+      }
+
+      setHistory([]);
+      setCurrentStocks(0);
+      setProductionToday(0);
+      window.localStorage.removeItem(stockStorageKey);
+      window.localStorage.removeItem(productionStorageKey);
+      window.localStorage.removeItem(historyStorageKey);
+      setSyncStatus("Synced");
+      showNotice("All production and sales records are reset to zero.");
+    } catch {
+      setSyncStatus("Reset failed");
+      showNotice("Reset failed. Please check the database connection.", "error");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function updateProductionForDateWithNotice(date: string, delta: number) {
+    const saved = await updateProductionForDate(date, delta);
+    setReviewDate(date);
+    return saved;
+  }
+
+  async function addProduction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const quantity = Number(productionInput);
     if (!Number.isFinite(quantity) || quantity <= 0) {
+      showNotice("Enter a valid production quantity.", "error");
       return;
     }
 
-    void updateProductionForDate(entryDate, quantity);
+    const saved = await updateProductionForDateWithNotice(entryDate, quantity);
+    showNotice(
+      saved
+        ? `Production saved. Added ${quantity} stocks.`
+        : "Production was not saved. Please try again.",
+      saved ? "success" : "error",
+    );
     setProductionInput("");
   }
 
-  function correctProduction(event: FormEvent<HTMLFormElement>) {
+  async function correctProduction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const quantity = Number(correctionInput);
     if (!Number.isFinite(quantity) || quantity <= 0) {
+      showNotice("Enter a valid correction quantity.", "error");
       return;
     }
 
-    void updateProductionForDate(entryDate, -quantity);
+    const saved = await updateProductionForDateWithNotice(entryDate, -quantity);
+    showNotice(
+      saved
+        ? `Correction saved. Subtracted ${quantity} stocks.`
+        : "Correction was not saved. Please try again.",
+      saved ? "success" : "error",
+    );
     setCorrectionInput("");
   }
 
@@ -697,16 +751,24 @@ export default function Home() {
     void saveState(
       [nextRecord, ...history.filter((record) => record.date !== entryDate)],
       nextRecord,
-    );
+    ).then((saved) => {
+      showNotice(
+        saved
+          ? "Selected date was reset to zero production and sales."
+          : "Reset was not saved. Please try again.",
+        saved ? "success" : "error",
+      );
+    });
     setReviewDate(entryDate);
   }
 
-  function releaseStocks(event: FormEvent<HTMLFormElement>) {
+  async function releaseStocks(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const quantity = Number(releaseInput);
     const takenBy = releaseName.trim();
     if (!takenBy || !Number.isFinite(quantity) || quantity <= 0) {
+      showNotice("Enter a valid customer name and quantity.", "error");
       return;
     }
 
@@ -722,6 +784,7 @@ export default function Home() {
     };
     const allowedQuantity = Math.min(quantity, baseRecord.endingStocks);
     if (allowedQuantity <= 0) {
+      showNotice("No available stocks to release.", "error");
       return;
     }
 
@@ -742,9 +805,15 @@ export default function Home() {
       releases: [nextRelease, ...baseRecord.releases],
     });
 
-    void saveState(
+    const saved = await saveState(
       [nextRecord, ...history.filter((record) => record.date !== entryDate)],
       nextRecord,
+    );
+    showNotice(
+      saved
+        ? `Sales saved. Released ${allowedQuantity} stocks to ${takenBy}.`
+        : "Sales was not saved. Please try again.",
+      saved ? "success" : "error",
     );
     setReleaseInput("");
     setReleaseName("");
@@ -840,6 +909,18 @@ export default function Home() {
             <span>{syncStatus}</span>
             {isSaving && <span className="text-emerald-300">Saving...</span>}
           </div>
+          {notice && (
+            <div
+              className={`mb-3 rounded-[8px] border px-4 py-3 text-sm font-semibold ${
+                notice.tone === "success"
+                  ? "border-emerald-800 bg-emerald-950/70 text-emerald-200"
+                  : "border-red-900 bg-red-950/70 text-red-200"
+              }`}
+              role="status"
+            >
+              {notice.message}
+            </div>
+          )}
           {activeTab === "dashboard" && (
             <div className="grid gap-3">
               <section className="grid gap-3 rounded-[8px] border border-zinc-800 bg-zinc-950 p-4 sm:grid-cols-[1fr_auto] sm:items-center sm:p-5">
@@ -990,6 +1071,16 @@ export default function Home() {
                       >
                         <RotateCcw aria-hidden="true" size={18} />
                         Reset
+                      </button>
+                      <button
+                        aria-label="Reset all data"
+                        className="flex h-12 items-center justify-center gap-2 rounded-[8px] bg-red-950 px-4 font-semibold text-red-100 transition-colors hover:bg-red-900"
+                        onClick={() => void resetAllData()}
+                        title="Reset all data"
+                        type="button"
+                      >
+                        <RotateCcw aria-hidden="true" size={18} />
+                        Reset All
                       </button>
                     </div>
                   </form>

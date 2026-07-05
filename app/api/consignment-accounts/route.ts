@@ -370,7 +370,7 @@ export async function POST(request: Request) {
 
   const accountCheck = await pool.query(
     `
-      select customer_name
+      select customer_name, current_stocks
       from siomai_consignment_accounts
       where lower(customer_name) = lower($1) and pin_code = $2
     `,
@@ -379,6 +379,14 @@ export async function POST(request: Request) {
 
   if (accountCheck.rowCount === 0) {
     return Response.json({ error: "Invalid name or PIN." }, { status: 401 });
+  }
+
+  const availableStocks = Number(accountCheck.rows[0]?.current_stocks ?? 0);
+  if (body.action === "sell" && availableStocks < quantity) {
+    return Response.json(
+      { error: `Only ${availableStocks} stocks available.` },
+      { status: 409 },
+    );
   }
 
   const result = await pool.query(
@@ -431,6 +439,10 @@ export async function POST(request: Request) {
       `,
     body.action === "receive" ? [customerName, quantity, pinCode] : [customerName, quantity, pinCode, saleDate || new Date().toISOString().slice(0, 10)],
   );
+
+  if (result.rowCount === 0) {
+    return Response.json({ error: "Account update failed." }, { status: 404 });
+  }
 
   return Response.json({ account: toAccount(result.rows[0]) });
 }

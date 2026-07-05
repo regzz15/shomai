@@ -163,7 +163,8 @@ export default function ConsignmentPage() {
     });
 
     if (!response.ok) {
-      setAccountStatus("Unable to update stocks.");
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      setAccountStatus(data.error ?? "Unable to update stocks.");
       return;
     }
 
@@ -172,7 +173,11 @@ export default function ConsignmentPage() {
     setReceiveQty("");
     setSellQty("");
     setSaleDate(getTodayKey());
-    setAccountStatus(action === "receive" ? "Stocks received." : "Sales saved.");
+    setAccountStatus(
+      action === "receive"
+        ? `Saved. Added ${quantity} stocks.`
+        : `Sales saved. Recorded ${quantity} stocks sold.`,
+    );
   }
 
   async function submitOrder(event: FormEvent<HTMLFormElement>) {

@@ -120,3 +120,17 @@ export async function POST(request: Request) {
 
   return Response.json({ record });
 }
+
+export async function DELETE() {
+  if (!connectionString) {
+    return Response.json(
+      { error: "Missing Supabase Postgres connection string." },
+      { status: 500 },
+    );
+  }
+
+  await ensureTable();
+  await pool.query(`truncate table shomai_daily_records`);
+
+  return Response.json({ ok: true });
+}
